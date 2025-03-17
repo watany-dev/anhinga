@@ -20,13 +20,8 @@ var rootCmd = &cobra.Command{
 	Short: "A CLI tool to list and calculate cost of EBS volumes",
 	Long: `Anhinga is a CLI tool that lists EBS volumes and calculates their costs.
 It can display information in different formats like table or CSV.
-Use the -r flag to specify the AWS region.`,
+Use the -r flag to specify the AWS region, or omit it to use your default AWS configuration.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Validate region
-		if region == "" {
-			return fmt.Errorf("region must be specified with -r flag")
-		}
-
 		// Validate format
 		format := output.FormatType(strings.ToLower(formatType))
 		if format != output.TableFormat && format != output.CSVFormat {
@@ -52,9 +47,8 @@ func Execute() error {
 
 func init() {
 	// Define flags
-	rootCmd.Flags().StringVarP(&region, "region", "r", "", "AWS region (required)")
+	rootCmd.Flags().StringVarP(&region, "region", "r", "", "AWS region (optional, uses AWS SDK default configuration if not specified)")
 	rootCmd.Flags().StringVarP(&formatType, "format", "f", "table", "Output format (table or csv)")
 
-	// Mark region flag as required
-	rootCmd.MarkFlagRequired("region")
+	// Region flag is now optional
 }

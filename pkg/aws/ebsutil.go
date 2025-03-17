@@ -20,7 +20,14 @@ type EBSInfo struct {
 // GetEBSVolumes retrieves all EBS volumes in the specified region
 func GetEBSVolumes(region string) ([]EBSInfo, error) {
 	// Load AWS configuration
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	var cfg config.Config
+	var err error
+	
+	if region != "" {
+		cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	} else {
+		cfg, err = config.LoadDefaultConfig(context.TODO())
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config: %v", err)
 	}
