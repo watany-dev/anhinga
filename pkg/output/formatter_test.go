@@ -37,6 +37,12 @@ func TestFormatEBSOutputTo(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name:          "JSON Format Valid",
+			volumes:       getTestVolumes(),
+			format:        JSONFormat,
+			expectedError: false,
+		},
+		{
 			name:          "Unsupported Format",
 			volumes:       getTestVolumes(),
 			format:        FormatType("invalid"),
@@ -106,6 +112,22 @@ func TestFormatAsCSVErrorHandling(t *testing.T) {
 	alwaysFailsWriter := &badWriter{}
 	err := formatAsCSV(volumes, alwaysFailsWriter)
 	assert.Error(t, err)
+}
+
+func TestFormatAsJSON(t *testing.T) {
+	volumes := getTestVolumes()
+	buffer := &bytes.Buffer{}
+
+	err := formatAsJSON(volumes, buffer)
+	assert.NoError(t, err)
+	
+	output := buffer.String()
+	
+	// Check expected content
+	assert.Contains(t, output, `"volumes":`)
+	assert.Contains(t, output, `"volumeId": "vol-123"`)
+	assert.Contains(t, output, `"volumeId": "vol-456"`)
+	assert.Contains(t, output, `"totalCost": 17`)
 }
 
 // Helper to create test volume data

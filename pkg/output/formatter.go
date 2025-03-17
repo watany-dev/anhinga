@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"github.com/anhinga/anhinga/pkg/aws"
 	"github.com/olekukonko/tablewriter"
@@ -19,6 +20,9 @@ const (
 	
 	// CSVFormat represents CSV output format
 	CSVFormat FormatType = "csv"
+	
+	// JSONFormat represents JSON output format
+	JSONFormat FormatType = "json"
 )
 
 // FormatEBSOutput formats and outputs EBS volume information
@@ -33,6 +37,8 @@ func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Write
 		return formatAsTable(volumes, writer)
 	case CSVFormat:
 		return formatAsCSV(volumes, writer)
+	case JSONFormat:
+		return formatAsJSON(volumes, writer)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}
@@ -97,4 +103,26 @@ func formatAsCSV(volumes []aws.EBSInfo, writer io.Writer) error {
 
 	csvWriter.Flush()
 	return csvWriter.Error()
+}
+
+// formatAsJSON outputs EBS volume information as JSON
+func formatAsJSON(volumes []aws.EBSInfo, writer io.Writer) error {
+	type jsonOutput struct {
+		Volumes   []aws.EBSInfo `json:"volumes"`
+		TotalCost float64       `json:"totalCost"`
+	}
+	
+	var totalCost float64
+	for _, v := range volumes {
+		totalCost += v.Cost
+	}
+	
+	output := jsonOutput{
+		Volumes:   volumes,
+		TotalCost: totalCost,
+	}
+	
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
 }
