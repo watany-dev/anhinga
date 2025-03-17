@@ -23,11 +23,16 @@ const (
 
 // FormatEBSOutput formats and outputs EBS volume information
 func FormatEBSOutput(volumes []aws.EBSInfo, format FormatType) error {
+	return FormatEBSOutputTo(volumes, format, os.Stdout)
+}
+
+// FormatEBSOutputTo formats and outputs EBS volume information to a specified writer
+func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Writer) error {
 	switch format {
 	case TableFormat:
-		return formatAsTable(volumes, os.Stdout)
+		return formatAsTable(volumes, writer)
 	case CSVFormat:
-		return formatAsCSV(volumes, os.Stdout)
+		return formatAsCSV(volumes, writer)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}
