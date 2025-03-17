@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -20,7 +21,7 @@ type EBSInfo struct {
 // GetEBSVolumes retrieves all EBS volumes in the specified region
 func GetEBSVolumes(region string) ([]EBSInfo, error) {
 	// Load AWS configuration
-	var cfg config.Config
+	var cfg aws.Config
 	var err error
 	
 	if region != "" {
