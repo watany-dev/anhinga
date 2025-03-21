@@ -11,11 +11,11 @@ import (
 
 // EBSInfo represents information about an EBS volume
 type EBSInfo struct {
-	VolumeID   string
-	VolumeType string
-	Size       int32
-	State      string
-	Cost       float64
+	VolumeID   string  `json:"volumeId"`
+	VolumeType string  `json:"volumeType"`
+	Size       int32   `json:"size"`
+	State      string  `json:"state"`
+	Cost       float64 `json:"cost"`
 }
 
 // GetEBSVolumes retrieves all EBS volumes in the specified region
