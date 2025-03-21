@@ -17,6 +17,12 @@ func TestFormatEBSOutput(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestCalculateTotalCost(t *testing.T) {
+	volumes := getTestVolumes()
+	totalCost := calculateTotalCost(volumes)
+	assert.Equal(t, 17.0, totalCost, "Total cost calculation should match expected value")
+}
+
 func TestFormatEBSOutputTo(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -67,8 +73,9 @@ func TestFormatEBSOutputTo(t *testing.T) {
 func TestFormatAsTable(t *testing.T) {
 	volumes := getTestVolumes()
 	buffer := &bytes.Buffer{}
+	totalCost := calculateTotalCost(volumes)
 
-	err := formatAsTable(volumes, buffer)
+	err := formatAsTable(volumes, totalCost, buffer)
 	assert.NoError(t, err)
 	
 	output := buffer.String()
@@ -92,8 +99,9 @@ func TestFormatAsTable(t *testing.T) {
 func TestFormatAsCSV(t *testing.T) {
 	volumes := getTestVolumes()
 	buffer := &bytes.Buffer{}
+	totalCost := calculateTotalCost(volumes)
 
-	err := formatAsCSV(volumes, buffer)
+	err := formatAsCSV(volumes, totalCost, buffer)
 	assert.NoError(t, err)
 	
 	output := buffer.String()
@@ -107,18 +115,20 @@ func TestFormatAsCSV(t *testing.T) {
 
 func TestFormatAsCSVErrorHandling(t *testing.T) {
 	volumes := getTestVolumes()
+	totalCost := calculateTotalCost(volumes)
 	
 	// Test with writer that always fails
 	alwaysFailsWriter := &badWriter{}
-	err := formatAsCSV(volumes, alwaysFailsWriter)
+	err := formatAsCSV(volumes, totalCost, alwaysFailsWriter)
 	assert.Error(t, err)
 }
 
 func TestFormatAsJSON(t *testing.T) {
 	volumes := getTestVolumes()
 	buffer := &bytes.Buffer{}
+	totalCost := calculateTotalCost(volumes)
 
-	err := formatAsJSON(volumes, buffer)
+	err := formatAsJSON(volumes, totalCost, buffer)
 	assert.NoError(t, err)
 	
 	output := buffer.String()

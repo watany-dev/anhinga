@@ -30,29 +30,37 @@ func FormatEBSOutput(volumes []aws.EBSInfo, format FormatType) error {
 	return FormatEBSOutputTo(volumes, format, os.Stdout)
 }
 
+// calculateTotalCost calculates the total cost of all volumes
+func calculateTotalCost(volumes []aws.EBSInfo) float64 {
+	var totalCost float64
+	for _, v := range volumes {
+		totalCost += v.Cost
+	}
+	return totalCost
+}
+
 // FormatEBSOutputTo formats and outputs EBS volume information to a specified writer
 func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Writer) error {
+	totalCost := calculateTotalCost(volumes)
+	
 	switch format {
 	case TableFormat:
-		return formatAsTable(volumes, writer)
+		return formatAsTable(volumes, totalCost, writer)
 	case CSVFormat:
-		return formatAsCSV(volumes, writer)
+		return formatAsCSV(volumes, totalCost, writer)
 	case JSONFormat:
-		return formatAsJSON(volumes, writer)
+		return formatAsJSON(volumes, totalCost, writer)
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
 // formatAsTable outputs EBS volume information as a table
-func formatAsTable(volumes []aws.EBSInfo, writer io.Writer) error {
+func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) error {
 	table := tablewriter.NewWriter(writer)
 	table.SetHeader([]string{"Volume ID", "Type", "Size (GB)", "State", "Monthly Cost ($)"})
 
-	var totalCost float64
 	for _, v := range volumes {
-		totalCost += v.Cost
-		
 		table.Append([]string{
 			v.VolumeID,
 			v.VolumeType,
@@ -72,20 +80,25 @@ func formatAsTable(volumes []aws.EBSInfo, writer io.Writer) error {
 }
 
 // formatAsCSV outputs EBS volume information as CSV
-func formatAsCSV(volumes []aws.EBSInfo, writer io.Writer) error {
+func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) error {
 	csvWriter := csv.NewWriter(writer)
 	
+	// writeRow wraps csv.Write with common error handling
+	writeRow := func(record []string) error {
+		if err := csvWriter.Write(record); err != nil {
+			return err
+		}
+		return nil
+	}
+	
 	// Write header
-	if err := csvWriter.Write([]string{"Volume ID", "Type", "Size (GB)", "State", "Monthly Cost ($)"}); err != nil {
+	if err := writeRow([]string{"Volume ID", "Type", "Size (GB)", "State", "Monthly Cost ($)"}); err != nil {
 		return err
 	}
 
 	// Write volume data
-	var totalCost float64
 	for _, v := range volumes {
-		totalCost += v.Cost
-		
-		if err := csvWriter.Write([]string{
+		if err := writeRow([]string{
 			v.VolumeID,
 			v.VolumeType,
 			strconv.Itoa(int(v.Size)),
@@ -97,7 +110,7 @@ func formatAsCSV(volumes []aws.EBSInfo, writer io.Writer) error {
 	}
 
 	// Write total as the last row
-	if err := csvWriter.Write([]string{"Total", "", "", "", fmt.Sprintf("%.2f", totalCost)}); err != nil {
+	if err := writeRow([]string{"Total", "", "", "", fmt.Sprintf("%.2f", totalCost)}); err != nil {
 		return err
 	}
 
@@ -106,15 +119,10 @@ func formatAsCSV(volumes []aws.EBSInfo, writer io.Writer) error {
 }
 
 // formatAsJSON outputs EBS volume information as JSON
-func formatAsJSON(volumes []aws.EBSInfo, writer io.Writer) error {
+func formatAsJSON(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) error {
 	type jsonOutput struct {
 		Volumes   []aws.EBSInfo `json:"volumes"`
 		TotalCost float64       `json:"totalCost"`
-	}
-	
-	var totalCost float64
-	for _, v := range volumes {
-		totalCost += v.Cost
 	}
 	
 	output := jsonOutput{
