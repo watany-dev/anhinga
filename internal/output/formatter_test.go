@@ -2,7 +2,7 @@ package output
 
 import (
 	"bytes"
-	"github.com/anhinga/anhinga/pkg/aws"
+	"github.com/anhinga/anhinga/internal/aws"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

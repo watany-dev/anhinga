@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/anhinga/anhinga/pkg/aws"
+	"github.com/anhinga/anhinga/internal/aws"
 	"github.com/olekukonko/tablewriter"
 	"io"
 	"os"

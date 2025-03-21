@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anhinga/anhinga/pkg/aws"
-	"github.com/anhinga/anhinga/pkg/output"
+	"github.com/anhinga/anhinga/internal/aws"
+	"github.com/anhinga/anhinga/internal/output"
 	"github.com/spf13/cobra"
 )
 
