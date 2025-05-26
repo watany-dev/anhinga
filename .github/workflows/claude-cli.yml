@@ -9,10 +9,10 @@ jobs:
       && contains(github.event.comment.body, '@claudecode') 
     runs-on: ubuntu-latest
     env:
-      ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
+      # ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
       CLAUDE_CODE_USE_BEDROCK: 1
       ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
-      DISABLE_PROMPT_CACHING: 1
+      # DISABLE_PROMPT_CACHING: 1
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     permissions:
