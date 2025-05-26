@@ -79,17 +79,17 @@ jobs:
             --allowedTools "mcp__GitHub__add_pull_request_review_comment,mcp__GitHub__create_pull_request_review,mcp__GitHub__enable_toolset,mcp__GitHub__get_pull_request,mcp__GitHub__get_pull_request_files,mcp__GitHub__get_pull_request_status,mcp__GitHub__get_pull_request_reviews,mcp__GitHub__get_pull_request_comments,mcp__GitHub__get_toolset_tools,mcp__GitHub__list_available_toolsets,mcp__GitHub__list_pull_requests,Bash,Read,Write,Edit,Create,gh" \
             --mcp-debug \
             --print --output-format json | tee output.json
-          cat output.json | jq '.'
+          cat output.json |  jq -r '.result' > response.txt
      
       - name: Post the response as a comment
         run: |
-          # JSON からコメント本文を抽出
-          RESPONSE=$(cat output.json | jq '.')
-
-          if [ -z "$RESPONSE" ]; then
-            echo "⚠️ Claude の出力が空なので、コメント投稿をスキップします。"
+          if [ ! -s response.txt ]; then
+            echo "⚠️ Claude の result が空なのでスキップします。"
             exit 0
           fi
+
+          # --body-file でファイル丸ごと渡す
+          gh issue comment ${{ github.event.issue.number }} --body-file response.txt
 
           # GitHub にコメントを投稿
           gh issue comment ${{ github.event.issue.number }} --body "$RESPONSE"
