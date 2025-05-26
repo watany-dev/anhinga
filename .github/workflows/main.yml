@@ -1,0 +1,22 @@
+# For AWS Bedrock with OIDC
+- name: Configure AWS Credentials (OIDC)
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+    aws-region: us-west-2
+
+- name: Generate GitHub App token
+  id: app-token
+  uses: actions/create-github-app-token@v2
+  with:
+    app-id: ${{ secrets.APP_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+- uses: anthropics/claude-code-action@beta
+  with:
+    model: "anthropic.claude-3-7-sonnet-20250219-beta:0"
+    use_bedrock: "true"
+    # ... other inputs
+
+  permissions:
+    id-token: write # Required for OIDC
