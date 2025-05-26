@@ -7,7 +7,7 @@ jobs:
   claude-code-action:
     if: ${{ 
       contains(
-        fromJson(github.secrets.ALLOWED_USERS_FOR_CLAUDE_CI), 
+        fromJson(secrets.ALLOWED_USERS_FOR_CLAUDE_CI), 
         github.actor
       ) && contains(github.event.comment.body, '@claude') }}
     runs-on: ubuntu-latest
