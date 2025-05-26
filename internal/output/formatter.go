@@ -17,10 +17,10 @@ type FormatType string
 const (
 	// TableFormat represents tabular output format
 	TableFormat FormatType = "table"
-	
+
 	// CSVFormat represents CSV output format
 	CSVFormat FormatType = "csv"
-	
+
 	// JSONFormat represents JSON output format
 	JSONFormat FormatType = "json"
 )
@@ -42,7 +42,7 @@ func calculateTotalCost(volumes []aws.EBSInfo) float64 {
 // FormatEBSOutputTo formats and outputs EBS volume information to a specified writer
 func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Writer) error {
 	totalCost := calculateTotalCost(volumes)
-	
+
 	switch format {
 	case TableFormat:
 		return formatAsTable(volumes, totalCost, writer)
@@ -74,7 +74,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) e
 	table.SetFooter([]string{"", "", "", "Total", fmt.Sprintf("%.2f", totalCost)})
 	table.SetBorder(true)
 	table.SetCaption(true, fmt.Sprintf("Total EBS Monthly Cost: $%.2f", totalCost))
-	
+
 	table.Render()
 	return nil
 }
@@ -82,7 +82,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) e
 // formatAsCSV outputs EBS volume information as CSV
 func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) error {
 	csvWriter := csv.NewWriter(writer)
-	
+
 	// writeRow wraps csv.Write with common error handling
 	writeRow := func(record []string) error {
 		if err := csvWriter.Write(record); err != nil {
@@ -90,7 +90,7 @@ func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) err
 		}
 		return nil
 	}
-	
+
 	// Write header
 	if err := writeRow([]string{"Volume ID", "Type", "Size (GB)", "State", "Monthly Cost ($)"}); err != nil {
 		return err
@@ -124,12 +124,12 @@ func formatAsJSON(volumes []aws.EBSInfo, totalCost float64, writer io.Writer) er
 		Volumes   []aws.EBSInfo `json:"volumes"`
 		TotalCost float64       `json:"totalCost"`
 	}
-	
+
 	output := jsonOutput{
 		Volumes:   volumes,
 		TotalCost: totalCost,
 	}
-	
+
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)
