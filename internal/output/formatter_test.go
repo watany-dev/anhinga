@@ -12,7 +12,7 @@ func TestFormatEBSOutput(t *testing.T) {
 	// since we can't easily capture os.Stdout output
 	err := FormatEBSOutput(getTestVolumes(), TableFormat)
 	assert.NoError(t, err)
-	
+
 	err = FormatEBSOutput(getTestVolumes(), FormatType("invalid"))
 	assert.Error(t, err)
 }
@@ -77,20 +77,20 @@ func TestFormatAsTable(t *testing.T) {
 
 	err := formatAsTable(volumes, totalCost, buffer)
 	assert.NoError(t, err)
-	
+
 	output := buffer.String()
-	
+
 	// Check that the output contains expected elements
 	assert.Contains(t, output, "VOLUME ID")
 	assert.Contains(t, output, "TYPE")
 	assert.Contains(t, output, "SIZE (GB)")
 	assert.Contains(t, output, "STATE")
 	assert.Contains(t, output, "MONTHLY COST ($)")
-	
+
 	// Check for volume data
 	assert.Contains(t, output, "vol-123")
 	assert.Contains(t, output, "vol-456")
-	
+
 	// Verify total is included
 	assert.Contains(t, output, "TOTAL")
 	assert.Contains(t, output, "17.00") // Combined cost of test volumes
@@ -103,9 +103,9 @@ func TestFormatAsCSV(t *testing.T) {
 
 	err := formatAsCSV(volumes, totalCost, buffer)
 	assert.NoError(t, err)
-	
+
 	output := buffer.String()
-	
+
 	// Check expected content
 	assert.Contains(t, output, "Volume ID,Type,Size (GB),State,Monthly Cost ($)")
 	assert.Contains(t, output, "vol-123,gp2,100,available,10.00")
@@ -116,7 +116,7 @@ func TestFormatAsCSV(t *testing.T) {
 func TestFormatAsCSVErrorHandling(t *testing.T) {
 	volumes := getTestVolumes()
 	totalCost := calculateTotalCost(volumes)
-	
+
 	// Test with writer that always fails
 	alwaysFailsWriter := &badWriter{}
 	err := formatAsCSV(volumes, totalCost, alwaysFailsWriter)
@@ -130,9 +130,9 @@ func TestFormatAsJSON(t *testing.T) {
 
 	err := formatAsJSON(volumes, totalCost, buffer)
 	assert.NoError(t, err)
-	
+
 	output := buffer.String()
-	
+
 	// Check expected content
 	assert.Contains(t, output, `"volumes":`)
 	assert.Contains(t, output, `"volumeId": "vol-123"`)

@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"time"
 )
 
 // EBSInfo represents information about an EBS volume
@@ -20,14 +21,18 @@ type EBSInfo struct {
 
 // GetEBSVolumes retrieves all EBS volumes in the specified region
 func GetEBSVolumes(region string) ([]EBSInfo, error) {
+	// Create context with timeout for AWS operations
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// Load AWS configuration
 	var cfg aws.Config
 	var err error
-	
+
 	if region != "" {
-		cfg, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	} else {
-		cfg, err = config.LoadDefaultConfig(context.TODO())
+		cfg, err = config.LoadDefaultConfig(ctx)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config: %v", err)
@@ -37,7 +42,7 @@ func GetEBSVolumes(region string) ([]EBSInfo, error) {
 	client := ec2.NewFromConfig(cfg)
 
 	// Describe volumes
-	resp, err := client.DescribeVolumes(context.TODO(), &ec2.DescribeVolumesInput{})
+	resp, err := client.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe volumes: %v", err)
 	}
@@ -46,7 +51,7 @@ func GetEBSVolumes(region string) ([]EBSInfo, error) {
 	var volumesInfo []EBSInfo
 	for _, volume := range resp.Volumes {
 		cost := calculateVolumeCost(volume, region)
-		
+
 		volumesInfo = append(volumesInfo, EBSInfo{
 			VolumeID:   *volume.VolumeId,
 			VolumeType: string(volume.VolumeType),
