@@ -6,7 +6,8 @@ on:
 jobs:
   claude-code-action:
     if: |
-      contains(github.event.comment.body, '@claude')
+      contains(fromJson(secrets.ALLOWED_USERS_FOR_CLAUDE_CI), github.actor)
+      && contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
