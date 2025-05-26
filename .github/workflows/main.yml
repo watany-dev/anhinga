@@ -6,7 +6,7 @@ on:
 jobs:
   claude-code-action:
     if: |
-      contains(github.event.comment.body, '@claude'))
+      contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,6 +27,5 @@ jobs:
       
       - uses: anthropics/claude-code-action@beta
         with:
-          model: "anthropic.claude-3-7-sonnet-20250219-beta:0"
+          model: "us.anthropic.claude-sonnet-4-20250514-v1:0"
           use_bedrock: "true"
-          # ... other inputs
