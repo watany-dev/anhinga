@@ -19,8 +19,10 @@ jobs:
       pull-requests: read
       issues: write
       id-token: write
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
@@ -33,34 +35,63 @@ jobs:
           role-session-name: GitHubActions${{ github.run_id }}
           mask-aws-account-id: true
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "22.x"
 
       - name: Install Claude CLI
         run: |
           npm install -g @anthropic-ai/claude-code --force --no-os-check
+          claude --version
           claude config set hasTrustDialogAccepted true
-          # …（省略）…
+          claude config add allowedTools mcp__GitHub__add_pull_request_review_comment
+          claude config add allowedTools mcp__GitHub__create_pull_request_review
+          claude config add allowedTools mcp__GitHub__enable_toolset
+          claude config add allowedTools mcp__GitHub__get_pull_request
+          claude config add allowedTools mcp__GitHub__get_pull_request_files
+          claude config add allowedTools mcp__GitHub__get_pull_request_status
+          claude config add allowedTools mcp__GitHub__get_pull_request_reviews
+          claude config add allowedTools mcp__GitHub__get_pull_request_comments
+          claude config add allowedTools mcp__GitHub__get_toolset_tools
+          claude config add allowedTools mcp__GitHub__list_available_toolsets
+          claude config add allowedTools mcp__GitHub__list_pull_requests
+          claude config add allowedTools Bash
+          claude config add allowedTools Read
+          claude config add allowedTools Write
+          claude config add allowedTools Edit
+          claude config add allowedTools Create
+          claude config add allowedTools gh
 
       - name: Process Comment with Claude
         run: |
           FULL_BODY="${{ github.event.comment.body }}"
+          # @cli-claude 以降のテキストを抽出
           CLAUDE_PROMPT=$(echo "$FULL_BODY" | sed -E 's/.*@cli-claude[[:space:]]*//')
-          [ -z "$CLAUDE_PROMPT" ] && CLAUDE_PROMPT="Please help me with this issue or pull request."
 
+          # 空ならデフォルトを設定
+          if [ -z "$CLAUDE_PROMPT" ]; then
+            CLAUDE_PROMPT="Please help me with this issue or pull request."
+          fi
+
+          # Claude CLI 実行（--prompt を必ず指定）
           claude \
-            --allowedTools "mcp__GitHub__add_pull_request_review_comment,..." \
+            --allowedTools "mcp__GitHub__add_pull_request_review_comment,mcp__GitHub__create_pull_request_review,mcp__GitHub__enable_toolset,mcp__GitHub__get_pull_request,mcp__GitHub__get_pull_request_files,mcp__GitHub__get_pull_request_status,mcp__GitHub__get_pull_request_reviews,mcp__GitHub__get_pull_request_comments,mcp__GitHub__get_toolset_tools,mcp__GitHub__list_available_toolsets,mcp__GitHub__list_pull_requests,Bash,Read,Write,Edit,Create,gh" \
             --prompt "$CLAUDE_PROMPT" \
+            --mcp-debug \
             --print \
             --output-format json \
           | tee output.json
 
       - name: Post the response as a comment
         run: |
+          # JSON からコメント本文を抽出
           RESPONSE=$(jq -r '.completions[0].data.content // empty' output.json)
+
           if [ -z "$RESPONSE" ]; then
-            echo "⚠️ Claude の出力が空なのでスキップ。"
+            echo "⚠️ Claude の出力が空なので、コメント投稿をスキップします。"
             exit 0
           fi
+
+          # GitHub にコメントを投稿
           gh issue comment ${{ github.event.issue.number }} --body "$RESPONSE"
