@@ -1,0 +1,59 @@
+name: Claude Assistant
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  claude-assistant:
+    if:  
+      github.event.issue.user.login == 'watany-dev'
+      && contains(github.event.comment.body, '@claudecode') 
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
+      CLAUDE_CODE_USE_BEDROCK: 1
+      ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
+      DISABLE_PROMPT_CACHING: 1
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      # For AWS Bedrock with OIDC
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-west-2
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      
+      - name: Install Claude CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code --force --no-os-check
+          claude --version
+          
+      - name: Process Comment with Claude
+        run: |
+          # Extract the comment content after @claude
+          CLAUDE_PROMPT="${{ github.event.comment.body }}"
+          
+          # If no specific prompt after @claude, use a default
+          if [ -z "$CLAUDE_PROMPT" ]; then
+            CLAUDE_PROMPT="Please help me with this issue or pull request."
+          fi
+          
+          # Run Claude with the extracted prompt
+          echo "$CLAUDE_PROMPT" | claude --print > claude_response.txt
+          
+          # Post the response as a comment
+          gh issue comment ${{ github.event.issue.number }} --body "$(cat claude_response.txt)"
