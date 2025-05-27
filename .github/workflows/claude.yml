@@ -12,10 +12,13 @@ jobs:
     env:
       ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
       id-token: write
+      contents: read
+      pull-requests: write
+      checks: read
+      issues: read
+      security-events: read
+      statuses: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
