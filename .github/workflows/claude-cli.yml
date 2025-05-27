@@ -18,7 +18,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-      pull-requests: read
+      pull-requests: write
       checks: read
       issues: write 
       security-events: read
@@ -70,7 +70,7 @@ jobs:
             --print --output-format json | tee output.json
           cat output.json |  jq -r '.result' > response.txt
           echo "" >> response.txt
-          cat output.json |  jq -r '.total_cost' >> response.txt
+          cat output.json | jq -r '"cost: \(.total_cost)"' >> response.txt'
      
       - name: Post the response as a comment
         run: |
