@@ -15,10 +15,13 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     permissions:
+      id-token: write
       contents: read
       pull-requests: read
-      issues: write
-      id-token: write
+      checks: read
+      issues: read
+      security-events: read
+      statuses: read
 
     steps:
       - name: Checkout repository
