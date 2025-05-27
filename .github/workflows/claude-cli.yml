@@ -15,12 +15,6 @@ jobs:
       ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
-env:
-      # for Amazon Bedrock
-      CLAUDE_CODE_USE_BEDROCK: 1
-      ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
-      GH_TOKEN: ${{ github.token }}
-      GITHUB_TOKEN: ${{ github.token }}
       # for Git Hub MCP Server
       GITHUB_DYNAMIC_TOOLSETS: 1
       GITHUB_TOOLSETS: "all"
@@ -29,8 +23,7 @@ env:
       contents: read
       pull-requests: read
       checks: read
-      issues: readSelection deleted
-
+      issues: read
       security-events: read
       statuses: read
 
