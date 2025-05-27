@@ -23,7 +23,7 @@ jobs:
       contents: read
       pull-requests: read
       checks: read
-      issues: read
+      issues: write 
       security-events: read
       statuses: read
 
