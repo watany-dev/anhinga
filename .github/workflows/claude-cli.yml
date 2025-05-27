@@ -15,6 +15,12 @@ jobs:
       ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
+env:
+      # for Amazon Bedrock
+      CLAUDE_CODE_USE_BEDROCK: 1
+      ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
       # for Git Hub MCP Server
       GITHUB_DYNAMIC_TOOLSETS: 1
       GITHUB_TOOLSETS: "all"
@@ -23,7 +29,8 @@ jobs:
       contents: read
       pull-requests: read
       checks: read
-      issues: read
+      issues: readSelection deleted
+
       security-events: read
       statuses: read
 
@@ -51,27 +58,7 @@ jobs:
         run: |
           npm install -g @anthropic-ai/claude-code --force --no-os-check
           claude --version
-          claude config set hasTrustDialogAccepted true
-          claude config add allowedTools mcp__GitHub__add_pull_request_review_comment
-          claude config add allowedTools mcp__GitHub__create_pull_request_review
-          claude config add allowedTools mcp__GitHub__enable_toolset
-          claude config add allowedTools mcp__GitHub__get_pull_request
-          claude config add allowedTools mcp__GitHub__get_pull_request_files
-          claude config add allowedTools mcp__GitHub__get_pull_request_status
-          claude config add allowedTools mcp__GitHub__get_pull_request_reviews
-          claude config add allowedTools mcp__GitHub__get_pull_request_comments
-          claude config add allowedTools mcp__GitHub__get_toolset_tools
-          claude config add allowedTools mcp__GitHub__list_available_toolsets
-          claude config add allowedTools mcp__GitHub__list_pull_requests
-          claude config add allowedTools Bash
-          claude config add allowedTools Read
-          claude config add allowedTools Write
-          claude config add allowedTools Edit
-          claude config add allowedTools Create
-          claude config add allowedTools gh
-          claude mcp add-json --scope "project" "GitHub" '{"type":"stdio","command":"docker","args":["run","--rm","--interactive","--env","GITHUB_PERSONAL_ACCESS_TOKEN","--env","GITHUB_DYNAMIC_TOOLSETS","--env","GITHUB_TOOLSETS","ghcr.io/github/github-mcp-server"],"env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"${{ env.GITHUB_PERSONAL_ACCESS_TOKEN }}","GITHUB_TOOLSETS":"${{ env.GITHUB_TOOLSETS }}","GITHUB_DYNAMIC_TOOLSETS":"${{ env.GITHUB_DYNAMIC_TOOLSETS }}"}}'
-
-
+          claude config set hasTrustDialogAccepted true          
       - name: Process Comment with Claude
         run: |
           FULL_BODY="${{ github.event.comment.body }}"
@@ -102,6 +89,3 @@ jobs:
 
           # --body-file でファイル丸ごと渡す
           gh issue comment ${{ github.event.issue.number }} --body-file response.txt
-
-          # GitHub にコメントを投稿
-          gh issue comment ${{ github.event.issue.number }} --body "$RESPONSE"
