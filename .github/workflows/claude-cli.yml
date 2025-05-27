@@ -21,8 +21,6 @@ jobs:
       pull-requests: write
       checks: read
       issues: write 
-      security-events: read
-      statuses: read
 
     steps:
       - name: Checkout repository
