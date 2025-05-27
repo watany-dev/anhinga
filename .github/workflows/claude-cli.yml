@@ -15,9 +15,6 @@ jobs:
       ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
-      # for Git Hub MCP Server
-      GITHUB_DYNAMIC_TOOLSETS: 1
-      GITHUB_TOOLSETS: "all"
     permissions:
       id-token: write
       contents: read
