@@ -51,7 +51,8 @@ jobs:
         run: |
           npm install -g @anthropic-ai/claude-code --force --no-os-check
           claude --version
-          claude config set hasTrustDialogAccepted true          
+          claude config set hasTrustDialogAccepted true
+          claude mcp add-json --scope "project" "GitHub" '{"type":"stdio","command":"docker","args":["run","--rm","--interactive","--env","GITHUB_PERSONAL_ACCESS_TOKEN","--env","GITHUB_DYNAMIC_TOOLSETS","--env","GITHUB_TOOLSETS","ghcr.io/github/github-mcp-server"],"env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"${{ env.GITHUB_PERSONAL_ACCESS_TOKEN }}","GITHUB_TOOLSETS":"${{ env.GITHUB_TOOLSETS }}","GITHUB_DYNAMIC_TOOLSETS":"${{ env.GITHUB_DYNAMIC_TOOLSETS }}"}}'
       - name: Process Comment with Claude
         run: |
           CLAUDE_PROMPT="${{ github.event.comment.body }}"
@@ -72,9 +73,9 @@ jobs:
       - name: Post the response as a comment
         run: |
           if [ ! -s response.txt ]; then
-            echo "⚠️ Claude の result が空なのでスキップします。"
+            echo "skipped."
             exit 0
           fi
 
-          # --body-file でファイル丸ごと渡す
+          # post
           gh issue comment ${{ github.event.issue.number }} --body-file response.txt
