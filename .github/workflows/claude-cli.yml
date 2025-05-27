@@ -83,4 +83,5 @@ jobs:
           fi
 
           # post
+          cat response.txt
           gh issue comment ${{ github.event.issue.number }} --body-file response.txt
