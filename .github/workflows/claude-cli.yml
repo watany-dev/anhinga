@@ -61,16 +61,12 @@ env:
           claude config set hasTrustDialogAccepted true          
       - name: Process Comment with Claude
         run: |
-          FULL_BODY="${{ github.event.comment.body }}"
-          # @cli-claude 以降のテキストを抽出
-          CLAUDE_PROMPT=$(echo "$FULL_BODY" | sed -E 's/.*@cli-claude[[:space:]]*//')
+          CLAUDE_PROMPT="${{ github.event.comment.body }}"
 
-          # 空ならデフォルトを設定
           if [ -z "$CLAUDE_PROMPT" ]; then
             CLAUDE_PROMPT="Please help me with this issue or pull request."
           fi
 
-          # Claude CLI 実行
           echo "$CLAUDE_PROMPT" | claude \
             --allowedTools "mcp__GitHub__add_pull_request_review_comment,mcp__GitHub__create_pull_request_review,mcp__GitHub__enable_toolset,mcp__GitHub__get_pull_request,mcp__GitHub__get_pull_request_files,mcp__GitHub__get_pull_request_status,mcp__GitHub__get_pull_request_reviews,mcp__GitHub__get_pull_request_comments,mcp__GitHub__get_toolset_tools,mcp__GitHub__list_available_toolsets,mcp__GitHub__list_pull_requests,Bash,Read,Write,Edit,Create,gh" \
             --mcp-debug \
