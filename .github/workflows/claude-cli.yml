@@ -1,4 +1,4 @@
-name: Claude Assistant
+name: Claude Code Assistant
 on:
   issue_comment:
     types: [created]
@@ -10,10 +10,14 @@ jobs:
       contains(github.event.comment.body, '@cli-claude')
     runs-on: ubuntu-latest
     env:
+      # for Amazon Bedrock
       CLAUDE_CODE_USE_BEDROCK: 1
       ANTHROPIC_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
+      # for Git Hub MCP Server
+      GITHUB_DYNAMIC_TOOLSETS: 1
+      GITHUB_TOOLSETS: "all"
     permissions:
       id-token: write
       contents: read
@@ -86,6 +90,8 @@ jobs:
             --mcp-config .mcp.json \
             --print --output-format json | tee output.json
           cat output.json |  jq -r '.result' > response.txt
+          echo "" >> response.txt
+          cat output.json |  jq -r '.total_cost' >> response.txt
      
       - name: Post the response as a comment
         run: |
