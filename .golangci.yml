@@ -1,0 +1,44 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - gosec
+    - errorlint
+    - bodyclose
+    - noctx
+    - nilerr
+    - unconvert
+    - copyloopvar
+    - misspell
+  settings:
+    misspell:
+      locale: US
+    gosec:
+      excludes:
+        # integer conversion overflow: only widening int32 -> int here
+        - G115
+  exclusions:
+    generated: lax
+    # v2 dropped v1's implicit default exclusions; restore the useful ones
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
