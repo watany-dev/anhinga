@@ -12,6 +12,7 @@ import (
 var (
 	region     string
 	formatType string
+	showOwner  bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -29,13 +30,23 @@ Use the -r flag to specify the AWS region, or omit it to use your default AWS co
 		}
 
 		// Get EBS volumes
-		volumes, err := aws.GetEBSVolumes(region)
+		volumes, err := aws.GetEBSVolumesWithOptions(aws.Options{
+			Region:    region,
+			ShowOwner: showOwner,
+			OnWarning: func(msg string) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning:", msg)
+			},
+		})
 		if err != nil {
 			return fmt.Errorf("failed to get EBS volumes: %v", err)
 		}
 
 		// Format and display output
-		return output.FormatEBSOutput(volumes, format)
+		var opts []output.Option
+		if showOwner {
+			opts = append(opts, output.WithOwner())
+		}
+		return output.FormatEBSOutput(volumes, format, opts...)
 	},
 }
 
@@ -49,6 +60,8 @@ func init() {
 	// Define flags
 	rootCmd.Flags().StringVarP(&region, "region", "r", "", "AWS region (optional, uses AWS SDK default configuration if not specified)")
 	rootCmd.Flags().StringVarP(&formatType, "format", "f", "table", "Output format (table, csv, or json)")
+	rootCmd.Flags().BoolVar(&showOwner, "show-owner", false,
+		"Resolve who created each volume via CloudTrail (one rate limited API call per volume; requires cloudtrail:LookupEvents, only covers the last 90 days)")
 
 	// Region flag is now optional
 }
