@@ -3,10 +3,16 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+
 jobs:
   claude-assistant:
+    # NOTE: gate on the *commenter*, not the issue author. `issue.user.login`
+    # matches anyone commenting on an issue watany-dev opened, which on a
+    # public repository means any GitHub user could trigger this job.
     if: >
-      github.event.issue.user.login == 'watany-dev' &&
+      github.event.comment.user.login == 'watany-dev' &&
       contains(github.event.comment.body, '@cli-claude')
     runs-on: ubuntu-latest
     env:
@@ -20,16 +26,19 @@ jobs:
       contents: read
       pull-requests: write
       checks: read
-      issues: write 
+      issues: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          # this job runs a coding agent with shell access; don't leave a
+          # credential behind in .git/config for it to pick up
+          persist-credentials: false
 
       - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-west-2
@@ -38,7 +47,7 @@ jobs:
           mask-aws-account-id: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22.x"
 
@@ -47,36 +56,29 @@ jobs:
           npm install -g @anthropic-ai/claude-code --force --no-os-check
           claude --version
           claude config set hasTrustDialogAccepted true
+
       - name: Process Comment with Claude
+        # the comment body reaches the shell through the environment, never
+        # through ${{ }} interpolation into the script itself
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          CLAUDE_PROMPT="${{ github.event.comment.body }}"
+          CLAUDE_PROMPT="${COMMENT_BODY:-Please help me with this issue or pull request.}"
 
-          if [ -z "$CLAUDE_PROMPT" ]; then
-            CLAUDE_PROMPT="Please help me with this issue or pull request."
-          fi
-
-          echo "$CLAUDE_PROMPT" | claude \
-            --allowedTools \
-            "\
-            Bash,\
-            Read,\
-            Write,\
-            Edit,\
-            Create,\
-            gh\
-            " \
+          printf '%s' "$CLAUDE_PROMPT" | claude \
+            --allowedTools "Bash,Read,Write,Edit,Create,gh" \
             --print --output-format json | tee output.json
-          cat output.json |  jq -r '.result' > response.txt
-          echo "" >> response.txt
-          cat output.json | jq -r '"cost: \(.total_cost)"' >> response.txt
-     
+
+          jq -r '.result' output.json > response.txt
+          printf '\ncost: %s\n' "$(jq -r '.total_cost' output.json)" >> response.txt
+
       - name: Post the response as a comment
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ ! -s response.txt ]; then
             echo "skipped."
             exit 0
           fi
 
-          # post
-          RESPONSE=$(cat response.txt)
-          gh issue comment "${{ github.event.issue.number }}" --body "$RESPONSE"
+          gh issue comment "$ISSUE_NUMBER" --body-file response.txt

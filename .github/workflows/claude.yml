@@ -3,36 +3,43 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+
 jobs:
   claude-code-action:
-    if:  
-      github.event.issue.user.login == 'watany-dev'
-      && contains(github.event.comment.body, '@claude') 
+    # NOTE: gate on the *commenter*, not the issue author (see claude-cli.yml).
+    if: >
+      github.event.comment.user.login == 'watany-dev' &&
+      contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_BEDROCK_BASE_URL: "https://bedrock-runtime.us-west-2.amazonaws.com"
+      ANTHROPIC_MODEL: "us.anthropic.claude-sonnet-4-20250514-v1:0"
     permissions:
       id-token: write
       contents: read
-      pull-requests: read
+      # the action posts its progress/answer as a comment, which needs write
+      pull-requests: write
+      issues: write
       checks: read
-      issues: read
-      security-events: read
       statuses: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
+
       # For AWS Bedrock with OIDC
       - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-west-2
-      
-      - uses: anthropics/claude-code-action@beta
+
+      # `@beta` no longer exists upstream; v1 takes the model via ANTHROPIC_MODEL
+      # rather than a `model` input.
+      - uses: anthropics/claude-code-action@672170b4a9bde1482339aeba9637452ef5490ca6 # v1.0.183
         with:
-          model: "us.anthropic.claude-sonnet-4-20250514-v1:0"
           use_bedrock: "true"
-          
