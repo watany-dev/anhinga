@@ -75,7 +75,7 @@ func TestFormatAsTable(t *testing.T) {
 	buffer := &bytes.Buffer{}
 	totalCost := calculateTotalCost(volumes)
 
-	err := formatAsTable(volumes, totalCost, buffer)
+	err := formatAsTable(volumes, totalCost, buffer, renderOptions{})
 	assert.NoError(t, err)
 
 	output := buffer.String()
@@ -101,7 +101,7 @@ func TestFormatAsCSV(t *testing.T) {
 	buffer := &bytes.Buffer{}
 	totalCost := calculateTotalCost(volumes)
 
-	err := formatAsCSV(volumes, totalCost, buffer)
+	err := formatAsCSV(volumes, totalCost, buffer, renderOptions{})
 	assert.NoError(t, err)
 
 	output := buffer.String()
@@ -119,7 +119,7 @@ func TestFormatAsCSVErrorHandling(t *testing.T) {
 
 	// Test with writer that always fails
 	alwaysFailsWriter := &badWriter{}
-	err := formatAsCSV(volumes, totalCost, alwaysFailsWriter)
+	err := formatAsCSV(volumes, totalCost, alwaysFailsWriter, renderOptions{})
 	assert.Error(t, err)
 }
 

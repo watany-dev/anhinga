@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -10,27 +11,71 @@ import (
 	"time"
 )
 
+const (
+	// describeTimeout bounds the DescribeVolumes call.
+	describeTimeout = 30 * time.Second
+
+	// ownerTimeoutPerVolume is budgeted per volume when resolving creators,
+	// since the CloudTrail lookups are rate limited and run sequentially.
+	ownerTimeoutPerVolume = 3 * time.Second
+
+	// ownerTimeoutMin is the floor for the owner resolution phase.
+	ownerTimeoutMin = 60 * time.Second
+
+	// ownerUnknownOutsideRetention labels volumes created before the
+	// CloudTrail event history window.
+	ownerUnknownOutsideRetention = "unknown (>90d)"
+)
+
 // EBSInfo represents information about an EBS volume
 type EBSInfo struct {
-	VolumeID   string  `json:"volumeId"`
-	VolumeType string  `json:"volumeType"`
-	Size       int32   `json:"size"`
-	State      string  `json:"state"`
-	Cost       float64 `json:"cost"`
+	VolumeID   string     `json:"volumeId"`
+	VolumeType string     `json:"volumeType"`
+	Size       int32      `json:"size"`
+	State      string     `json:"state"`
+	Cost       float64    `json:"cost"`
+	CreatedAt  *time.Time `json:"createdAt,omitempty"`
+	CreatedBy  string     `json:"createdBy,omitempty"`
+}
+
+// Options controls how volume information is collected.
+type Options struct {
+	// Region is the AWS region to query. Empty means the SDK default.
+	Region string
+
+	// ShowOwner enables CloudTrail lookups to resolve who created each
+	// volume. It costs one rate limited API call per volume, so it is opt-in.
+	ShowOwner bool
+
+	// OnWarning, when set, receives non-fatal messages such as individual
+	// CloudTrail lookups that failed.
+	OnWarning func(string)
+}
+
+func (o Options) warn(format string, args ...interface{}) {
+	if o.OnWarning != nil {
+		o.OnWarning(fmt.Sprintf(format, args...))
+	}
 }
 
 // GetEBSVolumes retrieves all EBS volumes in the specified region
 func GetEBSVolumes(region string) ([]EBSInfo, error) {
+	return GetEBSVolumesWithOptions(Options{Region: region})
+}
+
+// GetEBSVolumesWithOptions retrieves all EBS volumes, optionally resolving the
+// principal that created each of them via CloudTrail.
+func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {
 	// Create context with timeout for AWS operations
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), describeTimeout)
 	defer cancel()
 
 	// Load AWS configuration
 	var cfg aws.Config
 	var err error
 
-	if region != "" {
-		cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	if opts.Region != "" {
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(opts.Region))
 	} else {
 		cfg, err = config.LoadDefaultConfig(ctx)
 	}
@@ -50,7 +95,7 @@ func GetEBSVolumes(region string) ([]EBSInfo, error) {
 	// Process volumes
 	var volumesInfo []EBSInfo
 	for _, volume := range resp.Volumes {
-		cost := calculateVolumeCost(volume, region)
+		cost := calculateVolumeCost(volume, opts.Region)
 
 		volumesInfo = append(volumesInfo, EBSInfo{
 			VolumeID:   *volume.VolumeId,
@@ -58,10 +103,51 @@ func GetEBSVolumes(region string) ([]EBSInfo, error) {
 			Size:       *volume.Size,
 			State:      string(volume.State),
 			Cost:       cost,
+			CreatedAt:  volume.CreateTime,
 		})
 	}
 
+	if !opts.ShowOwner || len(volumesInfo) == 0 {
+		return volumesInfo, nil
+	}
+
+	if err := resolveOwners(NewOwnerResolver(cfg), volumesInfo, opts); err != nil {
+		return nil, err
+	}
+
 	return volumesInfo, nil
+}
+
+// resolveOwners fills in the CreatedBy field of every volume. Individual
+// failures degrade to "unknown"; only a permission error aborts the whole
+// phase, since it would fail identically for every remaining volume.
+func resolveOwners(resolver *OwnerResolver, volumes []EBSInfo, opts Options) error {
+	timeout := time.Duration(len(volumes)) * ownerTimeoutPerVolume
+	if timeout < ownerTimeoutMin {
+		timeout = ownerTimeoutMin
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for i := range volumes {
+		creator, err := resolver.Resolve(ctx, volumes[i].VolumeID, volumes[i].CreatedAt)
+		switch {
+		case err == nil:
+			volumes[i].CreatedBy = creator
+		case errors.Is(err, ErrOutsideRetention):
+			volumes[i].CreatedBy = ownerUnknownOutsideRetention
+		case errors.Is(err, ErrEventNotFound):
+			volumes[i].CreatedBy = unknownOwner
+		case IsAccessDenied(err):
+			return fmt.Errorf("cloudtrail:LookupEvents is required for --show-owner: %w", err)
+		default:
+			volumes[i].CreatedBy = unknownOwner
+			opts.warn("could not resolve creator of %s: %v", volumes[i].VolumeID, err)
+		}
+	}
+
+	return nil
 }
 
 // calculateVolumeCost calculates the monthly cost of an EBS volume
