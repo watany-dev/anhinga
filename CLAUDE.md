@@ -4,17 +4,24 @@
 - Build: `make build`
 - Run: `make run`
 - Install: `make install`
-- Clean: `rm -f anhinga && go clean`
+- Clean: `make clean`
 
 ## Test Commands
-- Run all tests: `go test -v ./...`
+- Run all tests: `make test`
+- Run with the race detector: `make test-race`
+- Test coverage: `make cover`
 - Run specific test: `go test -v ./path/to/package -run TestName`
-- Run integration tests (mohua): `cd mohua && make test-integ`
-- Test coverage: `cd mohua && make cover`
 
 ## Lint Command
-- Lint: `cd mohua && make lint` (requires golangci-lint)
-- Install linter: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+- Lint: `make lint` (golangci-lint v2, config in `.golangci.yml`)
+- Auto-format: `make fmt`
+- Vet: `make vet`
+- Install the linter: `make tools`
+
+## CI
+- `ci.yml`: build, `make test-race`, `make cover`, golangci-lint
+- `security.yml`: semgrep, govulncheck, gitleaks (advisory; they report to the
+  Security tab but do not fail the build yet)
 
 ## Code Style Guidelines
 - Use Go standard formatting (`go fmt`)

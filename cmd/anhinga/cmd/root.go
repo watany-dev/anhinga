@@ -34,11 +34,11 @@ Use the -r flag to specify the AWS region, or omit it to use your default AWS co
 			Region:    region,
 			ShowOwner: showOwner,
 			OnWarning: func(msg string) {
-				fmt.Fprintln(cmd.ErrOrStderr(), "warning:", msg)
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "warning:", msg)
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to get EBS volumes: %v", err)
+			return fmt.Errorf("failed to get EBS volumes: %w", err)
 		}
 
 		// Format and display output

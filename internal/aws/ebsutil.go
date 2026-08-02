@@ -80,7 +80,7 @@ func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {
 		cfg, err = config.LoadDefaultConfig(ctx)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to load SDK config: %v", err)
+		return nil, fmt.Errorf("unable to load SDK config: %w", err)
 	}
 
 	// Create EC2 client
@@ -89,7 +89,7 @@ func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {
 	// Describe volumes
 	resp, err := client.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to describe volumes: %v", err)
+		return nil, fmt.Errorf("failed to describe volumes: %w", err)
 	}
 
 	// Process volumes

@@ -1,0 +1,106 @@
+name: Security
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # weekly, so newly published advisories surface without a code change
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # NOTE: every job below is currently advisory -- findings are reported to the
+  # Security tab and the job log but do not fail the build. Once the existing
+  # findings have been triaged, drop `continue-on-error` (and add `--error` to
+  # the semgrep invocation) to make these blocking.
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # deliberately not `container: semgrep/semgrep` -- that image has no Node
+      # runtime, so the upload-sarif action cannot run inside it
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install semgrep
+        run: pip install "semgrep==1.172.0"
+
+      - name: Run semgrep
+        run: |
+          semgrep scan \
+            --config=p/golang \
+            --config=p/security-audit \
+            --config=p/github-actions \
+            --sarif --output=semgrep.sarif \
+            --metrics=off
+
+      - name: Upload SARIF to code scanning
+        if: always()
+        # fork PRs get a read-only token and cannot upload; that is expected
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@c54b30b7df092240050e69945842bc67aee0f0f4 # v4.37.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          # NOT go-version-file: the go directive in go.mod pins an old patch
+          # release, and scanning with it reports stdlib advisories that are
+          # about the toolchain rather than this project's dependencies
+          go-version: stable
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # full history, so a secret committed and later removed is still found
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
