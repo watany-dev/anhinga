@@ -111,28 +111,42 @@ func (r *OwnerResolver) Resolve(ctx context.Context, volumeID string, createdAt 
 		MaxResults: aws.Int32(50),
 	}
 
-	resp, err := r.lookupWithRetry(ctx, input)
-	if err != nil {
-		return "", fmt.Errorf("failed to look up CloudTrail events for %s: %w", volumeID, err)
-	}
-
-	// Only one lookup attribute may be supplied per request, so CreateVolume
-	// is filtered on the client side.
-	for _, event := range resp.Events {
-		if event.EventName == nil || *event.EventName != "CreateVolume" {
-			continue
-		}
-		if event.CloudTrailEvent == nil {
-			continue
-		}
-		creator, err := parseCreator(*event.CloudTrailEvent)
+	seenTokens := make(map[string]struct{})
+	for page := 1; ; page++ {
+		response, err := r.lookupWithRetry(ctx, input)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse CloudTrail event for %s: %w", volumeID, err)
+			return "", fmt.Errorf("failed to look up CloudTrail events for %s page %d: %w", volumeID, page, err)
 		}
-		return creator, nil
-	}
+		if response == nil {
+			return "", fmt.Errorf("failed to look up CloudTrail events for %s page %d: nil response", volumeID, page)
+		}
 
-	return "", ErrEventNotFound
+		// Only one lookup attribute may be supplied per request, so
+		// CreateVolume is filtered on the client side.
+		for _, event := range response.Events {
+			if event.EventName == nil || *event.EventName != "CreateVolume" {
+				continue
+			}
+			if event.CloudTrailEvent == nil {
+				continue
+			}
+			creator, err := parseCreator(*event.CloudTrailEvent)
+			if err != nil {
+				return "", fmt.Errorf("failed to parse CloudTrail event for %s: %w", volumeID, err)
+			}
+			return creator, nil
+		}
+
+		token := aws.ToString(response.NextToken)
+		if token == "" {
+			return "", ErrEventNotFound
+		}
+		if _, exists := seenTokens[token]; exists {
+			return "", fmt.Errorf("failed to look up CloudTrail events for %s page %d: duplicate pagination token %q", volumeID, page, token)
+		}
+		seenTokens[token] = struct{}{}
+		input.NextToken = aws.String(token)
+	}
 }
 
 // lookupWithRetry calls LookupEvents while respecting the API rate limit and

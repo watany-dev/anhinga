@@ -23,7 +23,8 @@ type mockCloudTrail struct {
 }
 
 func (m *mockCloudTrail) LookupEvents(_ context.Context, params *cloudtrail.LookupEventsInput, _ ...func(*cloudtrail.Options)) (*cloudtrail.LookupEventsOutput, error) {
-	m.inputs = append(m.inputs, params)
+	paramsCopy := *params
+	m.inputs = append(m.inputs, &paramsCopy)
 	idx := m.calls
 	m.calls++
 
@@ -134,6 +135,47 @@ func TestResolveEventNotFound(t *testing.T) {
 	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
 
 	assert.ErrorIs(t, err, ErrEventNotFound)
+}
+
+func TestResolveFindsCreateEventOnLaterPage(t *testing.T) {
+	client := &mockCloudTrail{responses: []*cloudtrail.LookupEventsOutput{
+		{
+			Events:    []cttypes.Event{{EventName: aws.String("AttachVolume")}},
+			NextToken: aws.String("page-2"),
+		},
+		createVolumeEvent(assumedRoleEvent),
+	}}
+	resolver := newTestResolver(client)
+
+	creator, err := resolver.Resolve(context.Background(), "vol-123", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "DeployRole/alice", creator)
+	require.Len(t, client.inputs, 2)
+	assert.Nil(t, client.inputs[0].NextToken)
+	assert.Equal(t, "page-2", aws.ToString(client.inputs[1].NextToken))
+}
+
+func TestResolveRejectsNilResponse(t *testing.T) {
+	client := &mockCloudTrail{responses: []*cloudtrail.LookupEventsOutput{nil}}
+	resolver := newTestResolver(client)
+
+	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
+
+	assert.ErrorContains(t, err, "nil response")
+}
+
+func TestResolveStopsOnDuplicateToken(t *testing.T) {
+	client := &mockCloudTrail{responses: []*cloudtrail.LookupEventsOutput{
+		{NextToken: aws.String("duplicate")},
+		{NextToken: aws.String("duplicate")},
+	}}
+	resolver := newTestResolver(client)
+
+	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
+
+	assert.ErrorContains(t, err, "duplicate pagination token")
+	assert.Equal(t, 2, client.calls)
 }
 
 func TestResolveRetriesOnThrottling(t *testing.T) {
