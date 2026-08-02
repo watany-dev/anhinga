@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/anhinga/anhinga/internal/aws"
+	"github.com/watany-dev/anhinga/internal/aws"
 )
 
 const benchmarkVolumeCount = 10_000

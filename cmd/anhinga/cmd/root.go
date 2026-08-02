@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anhinga/anhinga/internal/aws"
-	"github.com/anhinga/anhinga/internal/output"
 	"github.com/spf13/cobra"
+	"github.com/watany-dev/anhinga/internal/aws"
+	"github.com/watany-dev/anhinga/internal/output"
 )
 
 var (

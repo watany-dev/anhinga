@@ -2,8 +2,8 @@ package output
 
 import (
 	"bytes"
-	"github.com/anhinga/anhinga/internal/aws"
 	"github.com/stretchr/testify/assert"
+	"github.com/watany-dev/anhinga/internal/aws"
 	"testing"
 )
 

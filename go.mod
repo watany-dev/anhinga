@@ -1,4 +1,4 @@
-module github.com/anhinga/anhinga
+module github.com/watany-dev/anhinga
 
 go 1.26.5
 

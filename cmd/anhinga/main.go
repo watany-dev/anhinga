@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anhinga/anhinga/cmd/anhinga/cmd"
+	"github.com/watany-dev/anhinga/cmd/anhinga/cmd"
 )
 
 func main() {
