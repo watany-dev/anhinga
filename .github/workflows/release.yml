@@ -36,6 +36,8 @@ jobs:
           distribution: goreleaser
           # .goreleaser.yaml uses the version 2 schema
           version: "~> v2"
-          args: release --clean
+          # The generated EC2 SDK is memory intensive to compile. Building
+          # targets sequentially keeps release runners below their memory cap.
+          args: release --clean --parallelism 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
