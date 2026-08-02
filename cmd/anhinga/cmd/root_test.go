@@ -19,7 +19,7 @@ func TestRootCommandRejectsInvalidFormatBeforeLoading(t *testing.T) {
 			loaderCalled = true
 			return nil, nil
 		},
-		func([]aws.EBSInfo, output.FormatType, io.Writer, ...output.Option) error { return nil },
+		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
 	command.SetArgs([]string{"--format", "xml"})
 
@@ -32,7 +32,7 @@ func TestRootCommandRejectsInvalidFormatBeforeLoading(t *testing.T) {
 func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
 	var receivedOptions aws.Options
 	var receivedFormat output.FormatType
-	var receivedOutputOptions int
+	var receivedShowOwner bool
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	command := newRootCommand(
@@ -41,9 +41,9 @@ func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
 			opts.OnWarning("lookup failed")
 			return []aws.EBSInfo{{VolumeID: "vol-1"}}, nil
 		},
-		func(_ []aws.EBSInfo, format output.FormatType, writer io.Writer, opts ...output.Option) error {
+		func(_ []aws.EBSInfo, format output.FormatType, writer io.Writer, showOwner bool) error {
 			receivedFormat = format
-			receivedOutputOptions = len(opts)
+			receivedShowOwner = showOwner
 			_, err := io.WriteString(writer, "formatted\n")
 			return err
 		},
@@ -59,7 +59,7 @@ func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
 	assert.True(t, receivedOptions.ShowOwner)
 	assert.NotNil(t, receivedOptions.OnWarning)
 	assert.Equal(t, output.CSVFormat, receivedFormat)
-	assert.Equal(t, 1, receivedOutputOptions)
+	assert.True(t, receivedShowOwner)
 	assert.Equal(t, "formatted\n", stdout.String())
 	assert.Contains(t, stderr.String(), "warning: lookup failed")
 }
@@ -68,7 +68,7 @@ func TestRootCommandWrapsLoaderErrors(t *testing.T) {
 	loadError := errors.New("AWS unavailable")
 	command := newRootCommand(
 		func(aws.Options) ([]aws.EBSInfo, error) { return nil, loadError },
-		func([]aws.EBSInfo, output.FormatType, io.Writer, ...output.Option) error { return nil },
+		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
 	command.SetArgs(nil)
 
@@ -85,7 +85,7 @@ func TestRootCommandRejectsPositionalArguments(t *testing.T) {
 			loaderCalled = true
 			return nil, nil
 		},
-		func([]aws.EBSInfo, output.FormatType, io.Writer, ...output.Option) error { return nil },
+		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
 	command.SetArgs([]string{"unexpected"})
 

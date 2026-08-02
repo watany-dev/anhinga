@@ -59,11 +59,6 @@ func (o Options) warn(format string, args ...interface{}) {
 	}
 }
 
-// GetEBSVolumes retrieves all EBS volumes in the specified region
-func GetEBSVolumes(region string) ([]EBSInfo, error) {
-	return GetEBSVolumesWithOptions(Options{Region: region})
-}
-
 // GetEBSVolumesWithOptions retrieves all EBS volumes, optionally resolving the
 // principal that created each of them via CloudTrail.
 func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {

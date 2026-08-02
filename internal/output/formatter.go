@@ -8,7 +8,6 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/watany-dev/anhinga/internal/aws"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -30,49 +29,21 @@ const (
 	JSONFormat FormatType = "json"
 )
 
-// Option customizes how the output is rendered.
-type Option func(*renderOptions)
-
-type renderOptions struct {
-	showOwner bool
-}
-
-// WithOwner adds the "Created By" and "Created At" columns, populated from the
-// CloudTrail lookup.
-func WithOwner() Option {
-	return func(o *renderOptions) {
-		o.showOwner = true
-	}
-}
-
-func newRenderOptions(opts []Option) renderOptions {
-	var o renderOptions
-	for _, apply := range opts {
-		apply(&o)
-	}
-	return o
-}
-
 // createdAtLayout is the date format used for the "Created At" column.
 const createdAtLayout = "2006-01-02"
 
-// FormatEBSOutput formats and outputs EBS volume information
-func FormatEBSOutput(volumes []aws.EBSInfo, format FormatType, opts ...Option) error {
-	return FormatEBSOutputTo(volumes, format, os.Stdout, opts...)
-}
-
 // headerFor returns the column headers for the requested rendering.
-func headerFor(o renderOptions) []string {
-	if o.showOwner {
+func headerFor(showOwner bool) []string {
+	if showOwner {
 		return []string{"Volume ID", "Type", "Size (GB)", "State", "Created By", "Created At", "Monthly Cost ($)"}
 	}
 	return []string{"Volume ID", "Type", "Size (GB)", "State", "Monthly Cost ($)"}
 }
 
 // rowFor returns a single volume rendered as columns.
-func rowFor(v aws.EBSInfo, o renderOptions) []string {
+func rowFor(v aws.EBSInfo, showOwner bool) []string {
 	columnCount := 5
-	if o.showOwner {
+	if showOwner {
 		columnCount = 7
 	}
 	row := make([]string, 0, columnCount)
@@ -82,7 +53,7 @@ func rowFor(v aws.EBSInfo, o renderOptions) []string {
 		strconv.Itoa(int(v.Size)),
 		v.State,
 	)
-	if o.showOwner {
+	if showOwner {
 		row = append(row, v.CreatedBy, formatCreatedAt(v.CreatedAt))
 	}
 	return append(row, strconv.FormatFloat(v.Cost, 'f', 2, 64))
@@ -160,15 +131,14 @@ func calculateTotalCost(volumes []aws.EBSInfo) float64 {
 }
 
 // FormatEBSOutputTo formats and outputs EBS volume information to a specified writer
-func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Writer, opts ...Option) error {
+func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Writer, showOwner bool) error {
 	totalCost := calculateTotalCost(volumes)
-	renderOpts := newRenderOptions(opts)
 
 	switch format {
 	case TableFormat:
-		return formatAsTable(volumes, totalCost, writer, renderOpts)
+		return formatAsTable(volumes, totalCost, writer, showOwner)
 	case CSVFormat:
-		return formatAsCSV(volumes, totalCost, writer, renderOpts)
+		return formatAsCSV(volumes, totalCost, writer, showOwner)
 	case JSONFormat:
 		return formatAsJSON(volumes, totalCost, writer)
 	default:
@@ -177,8 +147,8 @@ func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Write
 }
 
 // formatAsTable outputs EBS volume information as a table
-func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o renderOptions) error {
-	header := headerFor(o)
+func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, showOwner bool) error {
+	header := headerFor(showOwner)
 	for i := range header {
 		header[i] = strings.ToUpper(header[i])
 	}
@@ -190,7 +160,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o
 
 	rows := make([][]string, len(volumes))
 	for i, v := range volumes {
-		row := escapeTableRow(rowFor(v, o))
+		row := escapeTableRow(rowFor(v, showOwner))
 		rows[i] = row
 		for column, cell := range row {
 			widths[column] = max(widths[column], displayWidth(cell))
@@ -304,7 +274,7 @@ func writeSpaces(writer *bufio.Writer, count int) {
 }
 
 // formatAsCSV outputs EBS volume information as CSV
-func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o renderOptions) error {
+func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, showOwner bool) error {
 	csvWriter := csv.NewWriter(writer)
 
 	// writeRow wraps csv.Write with common error handling
@@ -316,14 +286,14 @@ func formatAsCSV(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o r
 	}
 
 	// Write header
-	header := headerFor(o)
+	header := headerFor(showOwner)
 	if err := writeRow(header); err != nil {
 		return err
 	}
 
 	// Write volume data
 	for _, v := range volumes {
-		if err := writeRow(rowFor(v, o)); err != nil {
+		if err := writeRow(rowFor(v, showOwner)); err != nil {
 			return err
 		}
 	}

@@ -37,7 +37,7 @@ func TestFormatAsTableWithOwner(t *testing.T) {
 	volumes := getOwnerTestVolumes()
 	buffer := &bytes.Buffer{}
 
-	err := formatAsTable(volumes, calculateTotalCost(volumes), buffer, renderOptions{showOwner: true})
+	err := formatAsTable(volumes, calculateTotalCost(volumes), buffer, true)
 	assert.NoError(t, err)
 
 	output := buffer.String()
@@ -55,7 +55,7 @@ func TestFormatAsTableEscapesTerminalControlCharacters(t *testing.T) {
 	volumes[0].CreatedBy = "DeployRole/\x1b]52;c;payload\a\nforged\u202Etxt\U000E0001"
 	buffer := &bytes.Buffer{}
 
-	err := formatAsTable(volumes, calculateTotalCost(volumes), buffer, renderOptions{showOwner: true})
+	err := formatAsTable(volumes, calculateTotalCost(volumes), buffer, true)
 	assert.NoError(t, err)
 
 	output := buffer.String()
@@ -70,7 +70,7 @@ func TestFormatAsCSVWithOwner(t *testing.T) {
 	volumes := getOwnerTestVolumes()
 	buffer := &bytes.Buffer{}
 
-	err := formatAsCSV(volumes, calculateTotalCost(volumes), buffer, renderOptions{showOwner: true})
+	err := formatAsCSV(volumes, calculateTotalCost(volumes), buffer, true)
 	assert.NoError(t, err)
 
 	output := buffer.String()
@@ -85,24 +85,13 @@ func TestFormatWithoutOwnerOmitsColumns(t *testing.T) {
 	volumes := getOwnerTestVolumes()
 	buffer := &bytes.Buffer{}
 
-	err := FormatEBSOutputTo(volumes, CSVFormat, buffer)
+	err := FormatEBSOutputTo(volumes, CSVFormat, buffer, false)
 	assert.NoError(t, err)
 
 	output := buffer.String()
 	assert.NotContains(t, output, "Created By")
 	assert.NotContains(t, output, "DeployRole/alice")
 	assert.Contains(t, output, "vol-123,gp2,100,available,10.00")
-}
-
-func TestFormatEBSOutputToWithOwnerOption(t *testing.T) {
-	volumes := getOwnerTestVolumes()
-
-	for _, format := range []FormatType{TableFormat, CSVFormat, JSONFormat} {
-		buffer := &bytes.Buffer{}
-		err := FormatEBSOutputTo(volumes, format, buffer, WithOwner())
-		assert.NoError(t, err)
-		assert.Contains(t, buffer.String(), "DeployRole/alice")
-	}
 }
 
 func TestFormatAsJSONIncludesOwner(t *testing.T) {

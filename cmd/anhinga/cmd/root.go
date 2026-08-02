@@ -12,7 +12,7 @@ import (
 
 type volumeLoader func(aws.Options) ([]aws.EBSInfo, error)
 
-type outputFormatter func([]aws.EBSInfo, output.FormatType, io.Writer, ...output.Option) error
+type outputFormatter func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error
 
 func newRootCommand(loadVolumes volumeLoader, formatVolumes outputFormatter) *cobra.Command {
 	var region string
@@ -45,11 +45,7 @@ Use the -r flag to specify the AWS region, or omit it to use your default AWS co
 				return fmt.Errorf("failed to get EBS volumes: %w", err)
 			}
 
-			var options []output.Option
-			if showOwner {
-				options = append(options, output.WithOwner())
-			}
-			return formatVolumes(volumes, format, command.OutOrStdout(), options...)
+			return formatVolumes(volumes, format, command.OutOrStdout(), showOwner)
 		},
 	}
 
