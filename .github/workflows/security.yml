@@ -18,10 +18,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # NOTE: every job below is currently advisory -- findings are reported to the
-  # Security tab and the job log but do not fail the build. Once the existing
-  # findings have been triaged, drop `continue-on-error` (and add `--error` to
-  # the semgrep invocation) to make these blocking.
+  # Semgrep and gitleaks remain advisory while their existing findings are
+  # triaged. govulncheck is blocking because the current tree is clean.
   semgrep:
     name: semgrep
     runs-on: ubuntu-latest
@@ -66,7 +64,6 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,14 +73,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          # NOT go-version-file: the go directive in go.mod pins an old patch
-          # release, and scanning with it reports stdlib advisories that are
-          # about the toolchain rather than this project's dependencies
-          go-version: stable
+          go-version-file: go.mod
           cache: true
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
 
       - name: Run govulncheck
         run: govulncheck ./...
