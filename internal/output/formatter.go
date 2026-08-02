@@ -1,11 +1,12 @@
 package output
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/anhinga/anhinga/internal/aws"
-	"github.com/olekukonko/tablewriter"
+	"github.com/mattn/go-runewidth"
 	"io"
 	"os"
 	"strconv"
@@ -159,24 +160,111 @@ func FormatEBSOutputTo(volumes []aws.EBSInfo, format FormatType, writer io.Write
 
 // formatAsTable outputs EBS volume information as a table
 func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o renderOptions) error {
-	table := tablewriter.NewWriter(writer)
 	header := headerFor(o)
-	table.SetHeader(header)
-
-	for _, v := range volumes {
-		table.Append(escapeTableRow(rowFor(v, o)))
+	for i := range header {
+		header[i] = strings.ToUpper(header[i])
 	}
 
-	// Add total cost as the last row
-	footer := make([]string, len(header))
-	footer[len(footer)-2] = "Total"
-	footer[len(footer)-1] = fmt.Sprintf("%.2f", totalCost)
-	table.SetFooter(footer)
-	table.SetBorder(true)
-	table.SetCaption(true, fmt.Sprintf("Total EBS Monthly Cost: $%.2f", totalCost))
+	widths := make([]int, len(header))
+	for i, cell := range header {
+		widths[i] = runewidth.StringWidth(cell)
+	}
 
-	table.Render()
-	return nil
+	rows := make([][]string, len(volumes))
+	for i, v := range volumes {
+		row := escapeTableRow(rowFor(v, o))
+		rows[i] = row
+		for column, cell := range row {
+			widths[column] = max(widths[column], runewidth.StringWidth(cell))
+		}
+	}
+
+	buffer := bufio.NewWriterSize(writer, 64*1024)
+	writeBorder(buffer, widths)
+	writeTableRow(buffer, header, widths, tableHeader)
+	writeBorder(buffer, widths)
+	for _, row := range rows {
+		writeTableRow(buffer, row, widths, tableBody)
+	}
+	writeBorder(buffer, widths)
+	writeTableFooter(buffer, widths, fmt.Sprintf("%.2f", totalCost))
+	writeBorder(buffer, widths)
+	_, _ = fmt.Fprintf(buffer, "Total EBS Monthly Cost: $%.2f\n", totalCost)
+
+	return buffer.Flush()
+}
+
+type tableRowKind uint8
+
+const (
+	tableHeader tableRowKind = iota
+	tableBody
+)
+
+func writeBorder(writer *bufio.Writer, widths []int) {
+	_ = writer.WriteByte('+')
+	for _, width := range widths {
+		_, _ = writer.WriteString(strings.Repeat("-", width+2))
+		_ = writer.WriteByte('+')
+	}
+	_ = writer.WriteByte('\n')
+}
+
+func writeTableRow(writer *bufio.Writer, row []string, widths []int, kind tableRowKind) {
+	_ = writer.WriteByte('|')
+	for i, cell := range row {
+		_ = writer.WriteByte(' ')
+		alignment := alignLeft
+		if kind == tableHeader {
+			alignment = alignCenter
+		} else if i == 2 || i == len(row)-1 {
+			alignment = alignRight
+		}
+		writePadded(writer, cell, widths[i], alignment)
+		_, _ = writer.WriteString(" |")
+	}
+	_ = writer.WriteByte('\n')
+}
+
+func writeTableFooter(writer *bufio.Writer, widths []int, total string) {
+	prefixWidth := 0
+	for i := 0; i < len(widths)-2; i++ {
+		prefixWidth += widths[i]
+	}
+	prefixWidth += 3 * (len(widths) - 2)
+
+	_, _ = writer.WriteString("| ")
+	_, _ = writer.WriteString(strings.Repeat(" ", prefixWidth))
+	writePadded(writer, "TOTAL", widths[len(widths)-2], alignCenter)
+	_, _ = writer.WriteString(" | ")
+	writePadded(writer, total, widths[len(widths)-1], alignCenter)
+	_, _ = writer.WriteString(" |\n")
+}
+
+type tableAlignment uint8
+
+const (
+	alignLeft tableAlignment = iota
+	alignCenter
+	alignRight
+)
+
+func writePadded(writer *bufio.Writer, value string, width int, alignment tableAlignment) {
+	padding := width - runewidth.StringWidth(value)
+	left := 0
+	right := padding
+	switch alignment {
+	case alignCenter:
+		left = padding / 2
+		right = padding - left
+	case alignRight:
+		left = padding
+		right = 0
+	}
+
+	_, _ = writer.WriteString(strings.Repeat(" ", left))
+	_, _ = writer.WriteString(value)
+	_, _ = writer.WriteString(strings.Repeat(" ", right))
 }
 
 // formatAsCSV outputs EBS volume information as CSV

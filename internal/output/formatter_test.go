@@ -96,6 +96,29 @@ func TestFormatAsTable(t *testing.T) {
 	assert.Contains(t, output, "17.00") // Combined cost of test volumes
 }
 
+func TestFormatAsTablePreservesLayout(t *testing.T) {
+	buffer := &bytes.Buffer{}
+	err := formatAsTable(getTestVolumes(), 17, buffer, renderOptions{})
+	assert.NoError(t, err)
+
+	expected := `+-----------+------+-----------+-----------+------------------+
+| VOLUME ID | TYPE | SIZE (GB) |   STATE   | MONTHLY COST ($) |
++-----------+------+-----------+-----------+------------------+
+| vol-123   | gp2  |       100 | available |            10.00 |
+| vol-456   | io1  |        70 | available |             7.00 |
++-----------+------+-----------+-----------+------------------+
+|                                  TOTAL   |      17.00       |
++-----------+------+-----------+-----------+------------------+
+Total EBS Monthly Cost: $17.00
+`
+	assert.Equal(t, expected, buffer.String())
+}
+
+func TestFormatAsTableReportsWriterErrors(t *testing.T) {
+	err := formatAsTable(getTestVolumes(), 17, &badWriter{}, renderOptions{})
+	assert.Error(t, err)
+}
+
 func TestFormatAsCSV(t *testing.T) {
 	volumes := getTestVolumes()
 	buffer := &bytes.Buffer{}
