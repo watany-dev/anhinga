@@ -1,11 +1,12 @@
 # Anhinga
 
-Anhinga is a Go CLI tool that lists AWS EBS volumes and calculates their monthly costs based on volume type and size.
+Anhinga is a Go CLI tool that lists AWS EBS volumes and estimates their monthly
+storage costs based on volume type, size, and region.
 
 ## Features
 
 - List all EBS volumes in a specified AWS region
-- Calculate the monthly cost for each EBS volume
+- Estimate the monthly storage cost for each EBS volume
 - Display results in table, CSV, or JSON format
 - Show total cost of all EBS volumes
 
@@ -23,7 +24,7 @@ than `/usr/local/bin`.
 Or build from source:
 
 ```bash
-git clone https://github.com/username/anhinga.git
+git clone https://github.com/watany-dev/anhinga.git
 cd anhinga
 go build -o anhinga ./cmd/anhinga
 ```
@@ -46,7 +47,7 @@ anhinga -r us-east-1 --show-owner
 
 ### Flags
 
-- `-r, --region` (required): AWS region to query (e.g., us-east-1, us-west-2)
+- `-r, --region` (optional): AWS region to query; the AWS SDK default is used when omitted
 - `-f, --format`: Output format, either 'table', 'csv', or 'json' (default is 'table')
 - `--show-owner`: Resolve who created each volume via CloudTrail (off by default)
 
@@ -82,6 +83,12 @@ Anhinga uses the AWS SDK for Go and follows the standard AWS authentication meth
 3. IAM roles for EC2/ECS
 
 Ensure your AWS credentials are properly configured before using this tool.
+
+## Cost estimate limitations
+
+The reported amount is an estimate based on built-in per-GB-month rates. It is
+not an AWS bill or a quote from the AWS Pricing API. Provisioned IOPS,
+throughput, snapshots, taxes, discounts, and other charges are not included.
 
 ## Example Output
 
@@ -132,32 +139,35 @@ Total,,,,56.25
   "volumes": [
     {
       "volumeId": "vol-12345678",
-      "type": "gp2",
-      "sizeGb": 100,
+      "volumeType": "gp2",
+      "size": 100,
       "state": "in-use",
-      "monthlyCost": 10.00
+      "cost": 10.00,
+      "createdAt": "2026-06-14T10:30:00Z"
     },
     {
       "volumeId": "vol-87654321",
-      "type": "io1",
-      "sizeGb": 50,
+      "volumeType": "io1",
+      "size": 50,
       "state": "in-use",
-      "monthlyCost": 6.25
+      "cost": 6.25,
+      "createdAt": "2026-05-10T08:15:00Z"
     },
     {
       "volumeId": "vol-11223344",
-      "type": "gp3",
-      "sizeGb": 500,
+      "volumeType": "gp3",
+      "size": 500,
       "state": "in-use",
-      "monthlyCost": 40.00
+      "cost": 40.00,
+      "createdAt": "2026-07-02T14:45:00Z"
     }
   ],
-  "totalMonthlyCost": 56.25
+  "totalCost": 56.25
 }
 ```
 
-With `--show-owner`, each volume additionally carries `createdBy` and
-`createdAt` (both omitted when unavailable).
+`createdAt` is omitted when unavailable. With `--show-owner`, each volume also
+carries `createdBy` when it can be resolved.
 
 ## License
 
