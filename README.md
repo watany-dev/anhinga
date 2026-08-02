@@ -95,30 +95,24 @@ throughput, snapshots, taxes, discounts, and other charges are not included.
 ### Table Format
 
 ```
-+------------------+---------+-----------+---------+-----------------+
-|    VOLUME ID     |  TYPE   | SIZE (GB) |  STATE  | MONTHLY COST ($)|
-+------------------+---------+-----------+---------+-----------------+
-| vol-12345678     | gp2     |     100   | in-use  |           10.00 |
-| vol-87654321     | io1     |      50   | in-use  |            6.25 |
-| vol-11223344     | gp3     |     500   | in-use  |           40.00 |
-+------------------+---------+-----------+---------+-----------------+
-|                                         | TOTAL   |           56.25 |
-+------------------+---------+-----------+---------+-----------------+
+VOLUME ID    TYPE  SIZE (GB)  STATE   MONTHLY COST ($)
+vol-12345678  gp2   100        in-use  10.00
+vol-87654321  io1   50         in-use  6.25
+vol-11223344  gp3   500        in-use  40.00
+                               TOTAL   56.25
+
 Total EBS Monthly Cost: $56.25
 ```
 
 ### Table Format with `--show-owner`
 
 ```
-+--------------+------+-----------+-----------+---------------------------+------------+------------------+
-|  VOLUME ID   | TYPE | SIZE (GB) |   STATE   |        CREATED BY         | CREATED AT | MONTHLY COST ($) |
-+--------------+------+-----------+-----------+---------------------------+------------+------------------+
-| vol-12345678 | gp2  |       100 | in-use    | DeployRole/alice          | 2026-06-14 |            10.00 |
-| vol-87654321 | io1  |        50 | available | unknown (>90d)            |            |             6.25 |
-| vol-11223344 | gp3  |       500 | in-use    | autoscaling.amazonaws.com | 2026-07-02 |            40.00 |
-+--------------+------+-----------+-----------+---------------------------+------------+------------------+
-|                                                                             TOTAL    |      56.25       |
-+--------------+------+-----------+-----------+---------------------------+------------+------------------+
+VOLUME ID    TYPE  SIZE (GB)  STATE      CREATED BY                  CREATED AT  MONTHLY COST ($)
+vol-12345678  gp2   100        in-use     DeployRole/alice            2026-06-14  10.00
+vol-87654321  io1   50         available  unknown (>90d)                          6.25
+vol-11223344  gp3   500        in-use     autoscaling.amazonaws.com  2026-07-02  40.00
+                                                                      TOTAL       56.25
+
 Total EBS Monthly Cost: $56.25
 ```
 

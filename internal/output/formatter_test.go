@@ -29,14 +29,11 @@ func TestFormatAsTablePreservesLayout(t *testing.T) {
 	err := formatAsTable(getTestVolumes(), 17, buffer, false)
 	assert.NoError(t, err)
 
-	expected := `+-----------+------+-----------+-----------+------------------+
-| VOLUME ID | TYPE | SIZE (GB) |   STATE   | MONTHLY COST ($) |
-+-----------+------+-----------+-----------+------------------+
-| vol-123   | gp2  |       100 | available |            10.00 |
-| vol-456   | io1  |        70 | available |             7.00 |
-+-----------+------+-----------+-----------+------------------+
-|                                  TOTAL   |      17.00       |
-+-----------+------+-----------+-----------+------------------+
+	expected := `VOLUME ID  TYPE  SIZE (GB)  STATE      MONTHLY COST ($)
+vol-123    gp2   100        available  10.00
+vol-456    io1   70         available  7.00
+                            TOTAL      17.00
+
 Total EBS Monthly Cost: $17.00
 `
 	assert.Equal(t, expected, buffer.String())

@@ -1,18 +1,18 @@
 package output
 
 import (
-	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/mattn/go-runewidth"
-	"github.com/watany-dev/anhinga/internal/aws"
 	"io"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/watany-dev/anhinga/internal/aws"
 )
 
 // FormatType represents the output format type
@@ -153,124 +153,22 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, s
 		header[i] = strings.ToUpper(header[i])
 	}
 
-	widths := make([]int, len(header))
-	for i, cell := range header {
-		widths[i] = displayWidth(cell)
+	table := tabwriter.NewWriter(writer, 0, 4, 2, ' ', 0)
+	writeRow := func(row []string) {
+		_, _ = fmt.Fprintln(table, strings.Join(row, "\t"))
+	}
+	writeRow(header)
+
+	for _, volume := range volumes {
+		writeRow(escapeTableRow(rowFor(volume, showOwner)))
 	}
 
-	rows := make([][]string, len(volumes))
-	for i, v := range volumes {
-		row := escapeTableRow(rowFor(v, showOwner))
-		rows[i] = row
-		for column, cell := range row {
-			widths[column] = max(widths[column], displayWidth(cell))
-		}
-	}
-
-	buffer := bufio.NewWriterSize(writer, 64*1024)
-	writeBorder(buffer, widths)
-	writeTableRow(buffer, header, widths, tableHeader)
-	writeBorder(buffer, widths)
-	for _, row := range rows {
-		writeTableRow(buffer, row, widths, tableBody)
-	}
-	writeBorder(buffer, widths)
-	writeTableFooter(buffer, widths, strconv.FormatFloat(totalCost, 'f', 2, 64))
-	writeBorder(buffer, widths)
-	_, _ = fmt.Fprintf(buffer, "Total EBS Monthly Cost: $%.2f\n", totalCost)
-
-	return buffer.Flush()
-}
-
-type tableRowKind uint8
-
-const (
-	tableHeader tableRowKind = iota
-	tableBody
-)
-
-func writeBorder(writer *bufio.Writer, widths []int) {
-	_ = writer.WriteByte('+')
-	for _, width := range widths {
-		_, _ = writer.WriteString(strings.Repeat("-", width+2))
-		_ = writer.WriteByte('+')
-	}
-	_ = writer.WriteByte('\n')
-}
-
-func writeTableRow(writer *bufio.Writer, row []string, widths []int, kind tableRowKind) {
-	_ = writer.WriteByte('|')
-	for i, cell := range row {
-		_ = writer.WriteByte(' ')
-		alignment := alignLeft
-		if kind == tableHeader {
-			alignment = alignCenter
-		} else if i == 2 || i == len(row)-1 {
-			alignment = alignRight
-		}
-		writePadded(writer, cell, widths[i], alignment)
-		_, _ = writer.WriteString(" |")
-	}
-	_ = writer.WriteByte('\n')
-}
-
-func writeTableFooter(writer *bufio.Writer, widths []int, total string) {
-	prefixWidth := 0
-	for i := 0; i < len(widths)-2; i++ {
-		prefixWidth += widths[i]
-	}
-	prefixWidth += 3 * (len(widths) - 2)
-
-	_, _ = writer.WriteString("| ")
-	_, _ = writer.WriteString(strings.Repeat(" ", prefixWidth))
-	writePadded(writer, "TOTAL", widths[len(widths)-2], alignCenter)
-	_, _ = writer.WriteString(" | ")
-	writePadded(writer, total, widths[len(widths)-1], alignCenter)
-	_, _ = writer.WriteString(" |\n")
-}
-
-type tableAlignment uint8
-
-const (
-	alignLeft tableAlignment = iota
-	alignCenter
-	alignRight
-)
-
-func writePadded(writer *bufio.Writer, value string, width int, alignment tableAlignment) {
-	padding := width - displayWidth(value)
-	left := 0
-	right := padding
-	switch alignment {
-	case alignCenter:
-		left = padding / 2
-		right = padding - left
-	case alignRight:
-		left = padding
-		right = 0
-	}
-
-	writeSpaces(writer, left)
-	_, _ = writer.WriteString(value)
-	writeSpaces(writer, right)
-}
-
-func displayWidth(value string) int {
-	for i := 0; i < len(value); i++ {
-		if value[i] >= utf8.RuneSelf {
-			return runewidth.StringWidth(value)
-		}
-	}
-	return len(value)
-}
-
-func writeSpaces(writer *bufio.Writer, count int) {
-	const spaces = "                                                                "
-	for count > len(spaces) {
-		_, _ = writer.WriteString(spaces)
-		count -= len(spaces)
-	}
-	_, _ = writer.WriteString(spaces[:count])
+	total := make([]string, len(header))
+	total[len(total)-2] = "TOTAL"
+	total[len(total)-1] = strconv.FormatFloat(totalCost, 'f', 2, 64)
+	writeRow(total)
+	_, _ = fmt.Fprintf(table, "\nTotal EBS Monthly Cost: $%.2f\n", totalCost)
+	return table.Flush()
 }
 
 // formatAsCSV outputs EBS volume information as CSV
