@@ -33,13 +33,13 @@ jobs:
 
       # For AWS Bedrock with OIDC
       - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-west-2
 
       # `@beta` no longer exists upstream; v1 takes the model via ANTHROPIC_MODEL
       # rather than a `model` input.
-      - uses: anthropics/claude-code-action@672170b4a9bde1482339aeba9637452ef5490ca6 # v1.0.183
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
           use_bedrock: "true"
