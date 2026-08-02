@@ -24,9 +24,6 @@ const (
 	// CloudTrail allows 2 requests per second per account per region.
 	lookupInterval = 500 * time.Millisecond
 
-	// lookupMaxRetries is the number of retries on throttling before giving up.
-	lookupMaxRetries = 4
-
 	// unknownOwner is reported when the creator could not be determined.
 	unknownOwner = "unknown"
 )
@@ -52,9 +49,6 @@ type OwnerResolver struct {
 	// interval is the minimum gap enforced between two API calls.
 	interval time.Duration
 
-	// maxRetries bounds the exponential backoff on throttling errors.
-	maxRetries int
-
 	// now and wait are injectable so tests do not depend on wall clock time.
 	now  func() time.Time
 	wait func(context.Context, time.Duration) error
@@ -69,11 +63,10 @@ func NewOwnerResolver(cfg aws.Config) *OwnerResolver {
 
 func newOwnerResolver(client cloudTrailAPI) *OwnerResolver {
 	return &OwnerResolver{
-		client:     client,
-		interval:   lookupInterval,
-		maxRetries: lookupMaxRetries,
-		now:        time.Now,
-		wait:       waitForContext,
+		client:   client,
+		interval: lookupInterval,
+		now:      time.Now,
+		wait:     waitForContext,
 	}
 }
 
@@ -113,7 +106,10 @@ func (r *OwnerResolver) Resolve(ctx context.Context, volumeID string, createdAt 
 
 	seenTokens := make(map[string]struct{})
 	for page := 1; ; page++ {
-		response, err := r.lookupWithRetry(ctx, input)
+		if err := r.waitForSlot(ctx); err != nil {
+			return "", fmt.Errorf("failed to wait for CloudTrail rate limit: %w", err)
+		}
+		response, err := r.client.LookupEvents(ctx, input)
 		if err != nil {
 			return "", fmt.Errorf("failed to look up CloudTrail events for %s page %d: %w", volumeID, page, err)
 		}
@@ -147,38 +143,6 @@ func (r *OwnerResolver) Resolve(ctx context.Context, volumeID string, createdAt 
 		seenTokens[token] = struct{}{}
 		input.NextToken = aws.String(token)
 	}
-}
-
-// lookupWithRetry calls LookupEvents while respecting the API rate limit and
-// retrying throttled requests with exponential backoff.
-func (r *OwnerResolver) lookupWithRetry(ctx context.Context, input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error) {
-	backoff := r.interval
-	var lastErr error
-
-	for attempt := 0; attempt <= r.maxRetries; attempt++ {
-		if err := r.waitForSlot(ctx); err != nil {
-			return nil, err
-		}
-
-		resp, err := r.client.LookupEvents(ctx, input)
-		if err == nil {
-			return resp, nil
-		}
-		lastErr = err
-
-		if ctx.Err() != nil || !isThrottling(err) {
-			return nil, err
-		}
-
-		if attempt < r.maxRetries {
-			if err := r.wait(ctx, backoff); err != nil {
-				return nil, err
-			}
-			backoff *= 2
-		}
-	}
-
-	return nil, lastErr
 }
 
 // waitForSlot spaces API calls out to stay under the LookupEvents rate limit.
@@ -219,17 +183,6 @@ func IsAccessDenied(err error) bool {
 		return strings.Contains(code, "AccessDenied") ||
 			strings.Contains(code, "UnauthorizedOperation") ||
 			code == "AccessDeniedException"
-	}
-	return false
-}
-
-func isThrottling(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		code := apiErr.ErrorCode()
-		return strings.Contains(code, "Throttling") ||
-			strings.Contains(code, "TooManyRequests") ||
-			strings.Contains(code, "RequestLimitExceeded")
 	}
 	return false
 }

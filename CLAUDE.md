@@ -31,4 +31,4 @@
 - Use interfaces for testability
 - Defensive programming: check for nil pointers
 - Functions should be focused with descriptive comments
-- Use retries with exponential backoff for AWS API calls
+- Use the AWS SDK's built-in retries for AWS API calls

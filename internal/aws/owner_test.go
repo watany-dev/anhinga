@@ -181,57 +181,6 @@ func TestResolveStopsOnDuplicateToken(t *testing.T) {
 	assert.Equal(t, 2, client.calls)
 }
 
-func TestResolveRetriesOnThrottling(t *testing.T) {
-	throttled := &smithy.GenericAPIError{Code: "ThrottlingException", Message: "rate exceeded"}
-	client := &mockCloudTrail{
-		errs:      []error{throttled, throttled, nil},
-		responses: []*cloudtrail.LookupEventsOutput{nil, nil, createVolumeEvent(assumedRoleEvent)},
-	}
-	resolver := newTestResolver(client)
-
-	var slept []time.Duration
-	base := resolver.now
-	resolver.wait = func(_ context.Context, d time.Duration) error {
-		slept = append(slept, d)
-		return nil
-	}
-	resolver.now = base
-
-	creator, err := resolver.Resolve(context.Background(), "vol-123", nil)
-
-	require.NoError(t, err)
-	assert.Equal(t, "DeployRole/alice", creator)
-	assert.Equal(t, 3, client.calls)
-	// Backoff doubles between attempts, on top of the rate limit spacing.
-	require.GreaterOrEqual(t, len(slept), 2)
-	assert.Equal(t, lookupInterval, slept[0])
-	assert.Contains(t, slept, 2*lookupInterval)
-}
-
-func TestResolveGivesUpAfterMaxRetries(t *testing.T) {
-	throttled := &smithy.GenericAPIError{Code: "ThrottlingException", Message: "rate exceeded"}
-	client := &mockCloudTrail{errs: []error{throttled, throttled, throttled, throttled, throttled, throttled}}
-	resolver := newTestResolver(client)
-	resolver.wait = func(context.Context, time.Duration) error { return nil }
-
-	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
-
-	assert.Error(t, err)
-	assert.Equal(t, lookupMaxRetries+1, client.calls)
-}
-
-func TestResolveDoesNotRetryNonThrottlingErrors(t *testing.T) {
-	denied := &smithy.GenericAPIError{Code: "AccessDeniedException", Message: "not authorized"}
-	client := &mockCloudTrail{errs: []error{denied, denied}}
-	resolver := newTestResolver(client)
-
-	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
-
-	assert.Error(t, err)
-	assert.True(t, IsAccessDenied(err))
-	assert.Equal(t, 1, client.calls)
-}
-
 func TestResolveRateLimitsConsecutiveCalls(t *testing.T) {
 	client := &mockCloudTrail{}
 	resolver := newTestResolver(client)
