@@ -43,7 +43,10 @@ func newTestResolver(client cloudTrailAPI) *OwnerResolver {
 	r := newOwnerResolver(client)
 	now := time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)
 	r.now = func() time.Time { return now }
-	r.sleep = func(d time.Duration) { now = now.Add(d) }
+	r.wait = func(_ context.Context, d time.Duration) error {
+		now = now.Add(d)
+		return nil
+	}
 	return r
 }
 
@@ -188,7 +191,10 @@ func TestResolveRetriesOnThrottling(t *testing.T) {
 
 	var slept []time.Duration
 	base := resolver.now
-	resolver.sleep = func(d time.Duration) { slept = append(slept, d) }
+	resolver.wait = func(_ context.Context, d time.Duration) error {
+		slept = append(slept, d)
+		return nil
+	}
 	resolver.now = base
 
 	creator, err := resolver.Resolve(context.Background(), "vol-123", nil)
@@ -206,7 +212,7 @@ func TestResolveGivesUpAfterMaxRetries(t *testing.T) {
 	throttled := &smithy.GenericAPIError{Code: "ThrottlingException", Message: "rate exceeded"}
 	client := &mockCloudTrail{errs: []error{throttled, throttled, throttled, throttled, throttled, throttled}}
 	resolver := newTestResolver(client)
-	resolver.sleep = func(time.Duration) {}
+	resolver.wait = func(context.Context, time.Duration) error { return nil }
 
 	_, err := resolver.Resolve(context.Background(), "vol-123", nil)
 
@@ -233,9 +239,10 @@ func TestResolveRateLimitsConsecutiveCalls(t *testing.T) {
 	var slept []time.Duration
 	now := time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)
 	resolver.now = func() time.Time { return now }
-	resolver.sleep = func(d time.Duration) {
+	resolver.wait = func(_ context.Context, d time.Duration) error {
 		slept = append(slept, d)
 		now = now.Add(d)
+		return nil
 	}
 
 	_, _ = resolver.Resolve(context.Background(), "vol-1", nil)
@@ -256,6 +263,22 @@ func TestResolveRespectsCanceledContext(t *testing.T) {
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, client.calls)
+}
+
+func TestWaitForContextStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- waitForContext(ctx, time.Hour)
+	}()
+	cancel()
+
+	select {
+	case err := <-done:
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("wait did not stop after context cancellation")
+	}
 }
 
 func TestResolveUninitialized(t *testing.T) {
@@ -364,7 +387,7 @@ func TestResolveOwners(t *testing.T) {
 		errs: []error{nil, nil, &smithy.GenericAPIError{Code: "InternalError"}},
 	}
 	resolver := newTestResolver(client)
-	resolver.sleep = func(time.Duration) {}
+	resolver.wait = func(context.Context, time.Duration) error { return nil }
 
 	var warnings []string
 	opts := Options{ShowOwner: true, OnWarning: func(msg string) { warnings = append(warnings, msg) }}

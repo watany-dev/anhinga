@@ -55,9 +55,9 @@ type OwnerResolver struct {
 	// maxRetries bounds the exponential backoff on throttling errors.
 	maxRetries int
 
-	// now and sleep are injectable so tests do not depend on wall clock time.
-	now   func() time.Time
-	sleep func(time.Duration)
+	// now and wait are injectable so tests do not depend on wall clock time.
+	now  func() time.Time
+	wait func(context.Context, time.Duration) error
 
 	lastCall time.Time
 }
@@ -73,7 +73,7 @@ func newOwnerResolver(client cloudTrailAPI) *OwnerResolver {
 		interval:   lookupInterval,
 		maxRetries: lookupMaxRetries,
 		now:        time.Now,
-		sleep:      time.Sleep,
+		wait:       waitForContext,
 	}
 }
 
@@ -171,7 +171,9 @@ func (r *OwnerResolver) lookupWithRetry(ctx context.Context, input *cloudtrail.L
 		}
 
 		if attempt < r.maxRetries {
-			r.sleep(backoff)
+			if err := r.wait(ctx, backoff); err != nil {
+				return nil, err
+			}
 			backoff *= 2
 		}
 	}
@@ -186,11 +188,25 @@ func (r *OwnerResolver) waitForSlot(ctx context.Context) error {
 	}
 	if !r.lastCall.IsZero() {
 		if wait := r.interval - r.now().Sub(r.lastCall); wait > 0 {
-			r.sleep(wait)
+			if err := r.wait(ctx, wait); err != nil {
+				return err
+			}
 		}
 	}
 	r.lastCall = r.now()
 	return nil
+}
+
+func waitForContext(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // IsAccessDenied reports whether the error means the caller lacks the
