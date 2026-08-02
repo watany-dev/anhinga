@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"time"
 )
 
 const (
@@ -86,25 +87,9 @@ func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {
 	// Create EC2 client
 	client := ec2.NewFromConfig(cfg)
 
-	// Describe volumes
-	resp, err := client.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{})
+	volumesInfo, err := describeEBSVolumes(ctx, client, cfg.Region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe volumes: %w", err)
-	}
-
-	// Process volumes
-	var volumesInfo []EBSInfo
-	for _, volume := range resp.Volumes {
-		cost := calculateVolumeCost(volume, opts.Region)
-
-		volumesInfo = append(volumesInfo, EBSInfo{
-			VolumeID:   *volume.VolumeId,
-			VolumeType: string(volume.VolumeType),
-			Size:       *volume.Size,
-			State:      string(volume.State),
-			Cost:       cost,
-			CreatedAt:  volume.CreateTime,
-		})
 	}
 
 	if !opts.ShowOwner || len(volumesInfo) == 0 {
@@ -116,6 +101,69 @@ func GetEBSVolumesWithOptions(opts Options) ([]EBSInfo, error) {
 	}
 
 	return volumesInfo, nil
+}
+
+// describeEBSVolumes retrieves every response page and validates the required
+// fields before converting SDK values into the application's data model.
+func describeEBSVolumes(ctx context.Context, client ec2.DescribeVolumesAPIClient, region string) ([]EBSInfo, error) {
+	var volumes []EBSInfo
+	var nextToken *string
+	seenTokens := make(map[string]struct{})
+
+	for page := 1; ; page++ {
+		response, err := client.DescribeVolumes(ctx, &ec2.DescribeVolumesInput{
+			MaxResults: aws.Int32(500),
+			NextToken:  nextToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("page %d: %w", page, err)
+		}
+		if response == nil {
+			return nil, fmt.Errorf("page %d: EC2 returned a nil response", page)
+		}
+
+		for index, volume := range response.Volumes {
+			info, err := ebsInfoFromVolume(volume, region)
+			if err != nil {
+				return nil, fmt.Errorf("page %d volume %d: %w", page, index+1, err)
+			}
+			volumes = append(volumes, info)
+		}
+
+		token := aws.ToString(response.NextToken)
+		if token == "" {
+			break
+		}
+		if _, exists := seenTokens[token]; exists {
+			return nil, fmt.Errorf("page %d: duplicate pagination token %q", page, token)
+		}
+		seenTokens[token] = struct{}{}
+		nextToken = aws.String(token)
+	}
+
+	return volumes, nil
+}
+
+func ebsInfoFromVolume(volume types.Volume, region string) (EBSInfo, error) {
+	volumeID := aws.ToString(volume.VolumeId)
+	if volumeID == "" {
+		return EBSInfo{}, errors.New("missing volume ID")
+	}
+	if volume.Size == nil {
+		return EBSInfo{}, fmt.Errorf("volume %s has no size", volumeID)
+	}
+	if *volume.Size <= 0 {
+		return EBSInfo{}, fmt.Errorf("volume %s has invalid size %d", volumeID, *volume.Size)
+	}
+
+	return EBSInfo{
+		VolumeID:   volumeID,
+		VolumeType: string(volume.VolumeType),
+		Size:       *volume.Size,
+		State:      string(volume.State),
+		Cost:       calculateVolumeCost(volume.VolumeType, *volume.Size, region),
+		CreatedAt:  volume.CreateTime,
+	}, nil
 }
 
 // resolveOwners fills in the CreatedBy field of every volume. Individual
@@ -151,12 +199,12 @@ func resolveOwners(resolver *OwnerResolver, volumes []EBSInfo, opts Options) err
 }
 
 // calculateVolumeCost calculates the monthly cost of an EBS volume
-func calculateVolumeCost(volume types.Volume, region string) float64 {
+func calculateVolumeCost(volumeType types.VolumeType, size int32, region string) float64 {
 	// Pricing per GB-month varies by region and volume type
 	// These are example prices, actual AWS pricing should be used in production
 	var pricePerGB float64
 
-	switch volume.VolumeType {
+	switch volumeType {
 	case types.VolumeTypeGp2:
 		pricePerGB = 0.10
 	case types.VolumeTypeGp3:
@@ -183,5 +231,5 @@ func calculateVolumeCost(volume types.Volume, region string) float64 {
 	}
 
 	// Calculate monthly cost
-	return float64(*volume.Size) * pricePerGB
+	return float64(size) * pricePerGB
 }
