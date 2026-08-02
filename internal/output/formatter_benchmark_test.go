@@ -29,7 +29,7 @@ func benchmarkFormat(b *testing.B, format FormatType) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		if err := FormatEBSOutputTo(volumes, format, io.Discard); err != nil {
 			b.Fatal(err)
 		}
