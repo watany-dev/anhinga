@@ -17,6 +17,7 @@ build: $(GO_FILES)
 # Run tests
 test:
 	go test -v ./...
+	sh tests/install_test.sh
 
 # Run tests with the race detector
 test-race:

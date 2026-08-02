@@ -1,108 +1,141 @@
-#!/bin/bash
+#!/bin/sh
 
-# This script automates the installation of the anhinga tool.
-# It checks for the specified version (or fetches the latest one),
-# downloads the appropriate binary, and installs it on the system.
+set -eu
 
-# Check for required tools: curl, tar, unzip
-# These tools are necessary for downloading and extracting the anhinga binary.
-if ! command -v curl &> /dev/null; then
-    echo "Error: curl is not installed. Please install curl and try again."
+REPOSITORY="watany-dev/anhinga"
+INSTALL_DIR=${ANHINGA_INSTALL_DIR:-/usr/local/bin}
+
+die() {
+    printf 'Error: %s\n' "$*" >&2
     exit 1
-fi
+}
 
-if ! command -v tar &> /dev/null; then
-    echo "Error: tar is not installed. Please install tar and try again."
-    exit 1
-fi
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 is not installed."
+}
 
-if ! command -v unzip &> /dev/null; then
-    echo "Error: unzip is not installed. Please install unzip and try again."
-    exit 1
-fi
+normalize_version() {
+    version=${1#v}
+    case "$version" in
+        ''|*[!0-9A-Za-z.+-]*) return 1 ;;
+    esac
+    printf '%s\n' "$version"
+}
 
-# Determine the version of anhinga to install.
-# If no version is specified as a command line argument, fetch the latest version.
-if [ -z "$1" ]; then
-    VERSION=$(curl -s https://api.github.com/repos/watany-dev/anhinga/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-    if [ -z "$VERSION" ]; then
-        echo "Error: Failed to fetch the latest version."
-        exit 1
+detect_arch() {
+    case $(uname -m) in
+        x86_64|amd64) printf '%s\n' x86_64 ;;
+        arm64|aarch64) printf '%s\n' arm64 ;;
+        *) return 1 ;;
+    esac
+}
+
+detect_os() {
+    case $(uname -s) in
+        Linux) printf '%s\n' Linux ;;
+        Darwin) printf '%s\n' Darwin ;;
+        MINGW*|MSYS*|CYGWIN*) printf '%s\n' Windows ;;
+        *) return 1 ;;
+    esac
+}
+
+fetch_latest_version() {
+    curl --proto '=https' --tlsv1.2 -fsSL \
+        -H 'Accept: application/vnd.github+json' \
+        -H 'X-GitHub-Api-Version: 2022-11-28' \
+        "https://api.github.com/repos/${REPOSITORY}/releases/latest" |
+        sed -n 's/^[[:space:]]*"tag_name":[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' |
+        sed -n '1p'
+}
+
+verify_checksum() {
+    checksums=$1
+    archive_name=$2
+    archive=$3
+    expected=$(awk -v name="$archive_name" '$2 == name { print $1; exit }' "$checksums")
+    [ -n "$expected" ] || return 1
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$archive" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$archive" | awk '{print $1}')
+    else
+        return 1
     fi
-else
-    VERSION=$1
-fi
+    [ "$actual" = "$expected" ]
+}
 
-# Remove any leading 'v' from the version string.
-VERSION=${VERSION#v}
+install_binary() {
+    source_file=$1
+    destination=$2
 
-# Detect the architecture of the current system.
-ARCH=$(uname -m)
-case $ARCH in
-    x86_64|amd64) ARCH="x86_64" ;;
-    arm64|aarch64) ARCH="arm64" ;;
-    i386|i686)     ARCH="i386" ;;
-    *) echo "Error: Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-# Detect the operating system of the current system.
-OS=$(uname -s)
-case $OS in
-    Linux) OS="Linux" ;;
-    Darwin) OS="Darwin" ;;
-    MINGW*|MSYS*|CYGWIN*) OS="Windows" ;;
-    *) echo "Error: Unsupported OS: $OS"; exit 1 ;;
-esac
-
-# Determine the file extension based on the operating system.
-if [ "$OS" == "Windows" ]; then
-    EXT="zip"
-else
-    EXT="tar.gz"
-fi
-
-# Construct the download URL for the anhinga binary based on the version, OS, and architecture.
-FILE_NAME="anhinga_${OS}_${ARCH}.${EXT}"
-URL="https://github.com/watany-dev/anhinga/releases/download/v${VERSION}/${FILE_NAME}"
-
-# Download the anhinga binary.
-echo "Downloading anhinga from: $URL"
-if ! curl -L -o "$FILE_NAME" "$URL"; then
-    echo "Error: Failed to download anhinga. URL: $URL"
-    exit 1
-fi
-
-# Extract and install anhinga.
-echo "Installing anhinga..."
-if [ "$EXT" == "tar.gz" ]; then
-    if ! tar -xzf "$FILE_NAME"; then
-        echo "Error: Failed to extract anhinga."
-        exit 1
+    if [ -w "$INSTALL_DIR" ]; then
+        install -m 0755 "$source_file" "$destination"
+    else
+        require_command sudo
+        sudo install -m 0755 "$source_file" "$destination"
     fi
-    if [ "$OS" != "Windows" ]; then
-        if ! sudo mv anhinga /usr/local/bin/anhinga; then
-            echo "Error: Failed to install anhinga to /usr/local/bin."
-            exit 1
-        fi
+}
+
+main() {
+    require_command curl
+    require_command install
+
+    if [ "$#" -gt 1 ]; then
+        die "usage: install.sh [version]"
     fi
-elif [ "$EXT" == "zip" ]; then
-    if ! unzip "$FILE_NAME"; then
-        echo "Error: Failed to extract anhinga."
-        exit 1
+
+    if [ "$#" -eq 1 ]; then
+        requested_version=$1
+    else
+        requested_version=$(fetch_latest_version) || die "failed to fetch the latest version."
     fi
-    if [ "$OS" == "Windows" ]; then
-        if ! mv anhinga.exe /usr/local/bin/anhinga.exe; then
-            echo "Error: Failed to install anhinga.exe to /usr/local/bin."
-            exit 1
-        fi
+    version=$(normalize_version "$requested_version") || die "invalid version: $requested_version"
+
+    arch=$(detect_arch) || die "unsupported architecture: $(uname -m)"
+    os=$(detect_os) || die "unsupported operating system: $(uname -s)"
+    if [ "$os" = Windows ]; then
+        extension=zip
+        binary_name=anhinga.exe
+        require_command unzip
+    else
+        extension=tar.gz
+        binary_name=anhinga
+        require_command tar
     fi
-else
-    echo "Error: Unknown file extension: $EXT"
-    exit 1
+
+    archive_name="anhinga_${os}_${arch}.${extension}"
+    release_url="https://github.com/${REPOSITORY}/releases/download/v${version}"
+    temporary_directory=$(mktemp -d) || die "could not create a temporary directory."
+    trap 'rm -rf "$temporary_directory"' EXIT HUP INT TERM
+
+    archive="${temporary_directory}/${archive_name}"
+    checksums="${temporary_directory}/checksums.txt"
+    printf 'Downloading anhinga v%s...\n' "$version"
+    curl --proto '=https' --tlsv1.2 -fsSL -o "$archive" "${release_url}/${archive_name}" ||
+        die "failed to download ${archive_name}."
+    curl --proto '=https' --tlsv1.2 -fsSL -o "$checksums" "${release_url}/checksums.txt" ||
+        die "failed to download checksums.txt."
+    verify_checksum "$checksums" "$archive_name" "$archive" ||
+        die "checksum verification failed for ${archive_name}."
+
+    extract_directory="${temporary_directory}/extract"
+    mkdir "$extract_directory"
+    if [ "$extension" = tar.gz ]; then
+        tar -xzf "$archive" -C "$extract_directory" "$binary_name" ||
+            die "failed to extract ${binary_name}."
+    else
+        unzip -q "$archive" "$binary_name" -d "$extract_directory" ||
+            die "failed to extract ${binary_name}."
+    fi
+
+    [ -f "${extract_directory}/${binary_name}" ] && [ ! -L "${extract_directory}/${binary_name}" ] ||
+        die "release did not contain a regular ${binary_name} binary."
+
+    install_binary "${extract_directory}/${binary_name}" "${INSTALL_DIR}/${binary_name}"
+    printf 'Installed anhinga v%s to %s/%s\n' "$version" "$INSTALL_DIR" "$binary_name"
+}
+
+if [ "${ANHINGA_INSTALL_TESTING:-0}" != 1 ]; then
+    main "$@"
 fi
-
-# Clean up by removing the downloaded file.
-rm "$FILE_NAME"
-
-echo "anhinga installation complete."
-echo "Run 'anhinga --help' to see how to use anhinga."

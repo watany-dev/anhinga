@@ -16,6 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/watany-dev/anhinga/main/install.sh 
 anhinga -h
 ```
 
+The installer downloads the release checksum and verifies the archive before
+extracting the binary. Set `ANHINGA_INSTALL_DIR` to install somewhere other
+than `/usr/local/bin`.
+
 Or build from source:
 
 ```bash
