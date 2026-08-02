@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"bytes"
@@ -12,30 +12,28 @@ import (
 	"github.com/watany-dev/anhinga/internal/output"
 )
 
-func TestRootCommandRejectsInvalidFormatBeforeLoading(t *testing.T) {
+func TestRunRejectsInvalidFormatBeforeLoading(t *testing.T) {
 	loaderCalled := false
-	command := newRootCommand(
+	err := run([]string{"--format", "xml"}, io.Discard, io.Discard,
 		func(aws.Options) ([]aws.EBSInfo, error) {
 			loaderCalled = true
 			return nil, nil
 		},
 		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
-	command.SetArgs([]string{"--format", "xml"})
-
-	err := command.Execute()
 
 	assert.ErrorContains(t, err, "format must be")
 	assert.False(t, loaderCalled)
 }
 
-func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
+func TestRunPassesOptionsWarningsAndOutput(t *testing.T) {
 	var receivedOptions aws.Options
 	var receivedFormat output.FormatType
 	var receivedShowOwner bool
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	command := newRootCommand(
+
+	err := run([]string{"-r", "us-west-2", "-f", "CSV", "--show-owner"}, stdout, stderr,
 		func(opts aws.Options) ([]aws.EBSInfo, error) {
 			receivedOptions = opts
 			opts.OnWarning("lookup failed")
@@ -48,11 +46,6 @@ func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
 			return err
 		},
 	)
-	command.SetOut(stdout)
-	command.SetErr(stderr)
-	command.SetArgs([]string{"--region", "us-west-2", "--format", "CSV", "--show-owner"})
-
-	err := command.Execute()
 
 	require.NoError(t, err)
 	assert.Equal(t, "us-west-2", receivedOptions.Region)
@@ -64,33 +57,38 @@ func TestRootCommandPassesOptionsWarningsAndOutput(t *testing.T) {
 	assert.Contains(t, stderr.String(), "warning: lookup failed")
 }
 
-func TestRootCommandWrapsLoaderErrors(t *testing.T) {
+func TestRunWrapsLoaderErrors(t *testing.T) {
 	loadError := errors.New("AWS unavailable")
-	command := newRootCommand(
+	err := run(nil, io.Discard, io.Discard,
 		func(aws.Options) ([]aws.EBSInfo, error) { return nil, loadError },
 		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
-	command.SetArgs(nil)
-
-	err := command.Execute()
 
 	assert.ErrorIs(t, err, loadError)
 	assert.ErrorContains(t, err, "failed to get EBS volumes")
 }
 
-func TestRootCommandRejectsPositionalArguments(t *testing.T) {
+func TestRunRejectsPositionalArguments(t *testing.T) {
 	loaderCalled := false
-	command := newRootCommand(
+	err := run([]string{"unexpected"}, io.Discard, io.Discard,
 		func(aws.Options) ([]aws.EBSInfo, error) {
 			loaderCalled = true
 			return nil, nil
 		},
 		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
 	)
-	command.SetArgs([]string{"unexpected"})
-
-	err := command.Execute()
 
 	assert.Error(t, err)
 	assert.False(t, loaderCalled)
+}
+
+func TestRunHelp(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	err := run([]string{"--help"}, io.Discard, stderr,
+		func(aws.Options) ([]aws.EBSInfo, error) { return nil, nil },
+		func([]aws.EBSInfo, output.FormatType, io.Writer, bool) error { return nil },
+	)
+
+	require.NoError(t, err)
+	assert.Contains(t, stderr.String(), "Usage: anhinga")
 }
