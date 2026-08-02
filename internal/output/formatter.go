@@ -9,7 +9,9 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // FormatType represents the output format type
@@ -87,6 +89,48 @@ func formatCreatedAt(t *time.Time) string {
 	return t.UTC().Format(createdAtLayout)
 }
 
+// escapeUnsafeTerminalCharacters prevents data returned by AWS from injecting
+// terminal control sequences into the human-readable table. CSV and JSON keep
+// their original values so they remain suitable for machine processing.
+func escapeUnsafeTerminalCharacters(value string) string {
+	if strings.IndexFunc(value, isUnsafeTerminalRune) == -1 {
+		return value
+	}
+
+	const hex = "0123456789ABCDEF"
+	var escaped strings.Builder
+	escaped.Grow(len(value))
+	for _, r := range value {
+		if !isUnsafeTerminalRune(r) {
+			escaped.WriteRune(r)
+			continue
+		}
+
+		shift := 12
+		if r > 0xFFFF {
+			escaped.WriteString(`\U`)
+			shift = 28
+		} else {
+			escaped.WriteString(`\u`)
+		}
+		for ; shift >= 0; shift -= 4 {
+			escaped.WriteByte(hex[(r>>shift)&0xF])
+		}
+	}
+	return escaped.String()
+}
+
+func isUnsafeTerminalRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Cf)
+}
+
+func escapeTableRow(row []string) []string {
+	for i := range row {
+		row[i] = escapeUnsafeTerminalCharacters(row[i])
+	}
+	return row
+}
+
 // calculateTotalCost calculates the total cost of all volumes
 func calculateTotalCost(volumes []aws.EBSInfo) float64 {
 	var totalCost float64
@@ -120,7 +164,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o
 	table.SetHeader(header)
 
 	for _, v := range volumes {
-		table.Append(rowFor(v, o))
+		table.Append(escapeTableRow(rowFor(v, o)))
 	}
 
 	// Add total cost as the last row

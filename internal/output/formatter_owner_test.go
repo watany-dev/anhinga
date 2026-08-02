@@ -50,6 +50,22 @@ func TestFormatAsTableWithOwner(t *testing.T) {
 	assert.Contains(t, output, "17.00")
 }
 
+func TestFormatAsTableEscapesTerminalControlCharacters(t *testing.T) {
+	volumes := getOwnerTestVolumes()
+	volumes[0].CreatedBy = "DeployRole/\x1b]52;c;payload\a\nforged\u202Etxt\U000E0001"
+	buffer := &bytes.Buffer{}
+
+	err := formatAsTable(volumes, calculateTotalCost(volumes), buffer, renderOptions{showOwner: true})
+	assert.NoError(t, err)
+
+	output := buffer.String()
+	assert.NotContains(t, output, "\x1b")
+	assert.NotContains(t, output, "\a")
+	assert.NotContains(t, output, "\u202E")
+	assert.NotContains(t, output, "\U000E0001")
+	assert.Contains(t, output, `DeployRole/\u001B]52;c;payload\u0007\u000Aforged\u202Etxt\U000E0001`)
+}
+
 func TestFormatAsCSVWithOwner(t *testing.T) {
 	volumes := getOwnerTestVolumes()
 	buffer := &bytes.Buffer{}
