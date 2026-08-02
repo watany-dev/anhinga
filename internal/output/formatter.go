@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // FormatType represents the output format type
@@ -70,16 +71,21 @@ func headerFor(o renderOptions) []string {
 
 // rowFor returns a single volume rendered as columns.
 func rowFor(v aws.EBSInfo, o renderOptions) []string {
-	row := []string{
+	columnCount := 5
+	if o.showOwner {
+		columnCount = 7
+	}
+	row := make([]string, 0, columnCount)
+	row = append(row,
 		v.VolumeID,
 		v.VolumeType,
 		strconv.Itoa(int(v.Size)),
 		v.State,
-	}
+	)
 	if o.showOwner {
 		row = append(row, v.CreatedBy, formatCreatedAt(v.CreatedAt))
 	}
-	return append(row, fmt.Sprintf("%.2f", v.Cost))
+	return append(row, strconv.FormatFloat(v.Cost, 'f', 2, 64))
 }
 
 // formatCreatedAt renders a volume creation timestamp, tolerating a nil value.
@@ -94,7 +100,7 @@ func formatCreatedAt(t *time.Time) string {
 // terminal control sequences into the human-readable table. CSV and JSON keep
 // their original values so they remain suitable for machine processing.
 func escapeUnsafeTerminalCharacters(value string) string {
-	if strings.IndexFunc(value, isUnsafeTerminalRune) == -1 {
+	if !containsUnsafeTerminalRune(value) {
 		return value
 	}
 
@@ -119,6 +125,18 @@ func escapeUnsafeTerminalCharacters(value string) string {
 		}
 	}
 	return escaped.String()
+}
+
+func containsUnsafeTerminalRune(value string) bool {
+	for i := 0; i < len(value); i++ {
+		if value[i] < ' ' || value[i] == 0x7F {
+			return true
+		}
+		if value[i] >= utf8.RuneSelf {
+			return strings.IndexFunc(value, isUnsafeTerminalRune) != -1
+		}
+	}
+	return false
 }
 
 func isUnsafeTerminalRune(r rune) bool {
@@ -167,7 +185,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o
 
 	widths := make([]int, len(header))
 	for i, cell := range header {
-		widths[i] = runewidth.StringWidth(cell)
+		widths[i] = displayWidth(cell)
 	}
 
 	rows := make([][]string, len(volumes))
@@ -175,7 +193,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o
 		row := escapeTableRow(rowFor(v, o))
 		rows[i] = row
 		for column, cell := range row {
-			widths[column] = max(widths[column], runewidth.StringWidth(cell))
+			widths[column] = max(widths[column], displayWidth(cell))
 		}
 	}
 
@@ -187,7 +205,7 @@ func formatAsTable(volumes []aws.EBSInfo, totalCost float64, writer io.Writer, o
 		writeTableRow(buffer, row, widths, tableBody)
 	}
 	writeBorder(buffer, widths)
-	writeTableFooter(buffer, widths, fmt.Sprintf("%.2f", totalCost))
+	writeTableFooter(buffer, widths, strconv.FormatFloat(totalCost, 'f', 2, 64))
 	writeBorder(buffer, widths)
 	_, _ = fmt.Fprintf(buffer, "Total EBS Monthly Cost: $%.2f\n", totalCost)
 
@@ -250,7 +268,7 @@ const (
 )
 
 func writePadded(writer *bufio.Writer, value string, width int, alignment tableAlignment) {
-	padding := width - runewidth.StringWidth(value)
+	padding := width - displayWidth(value)
 	left := 0
 	right := padding
 	switch alignment {
@@ -262,9 +280,27 @@ func writePadded(writer *bufio.Writer, value string, width int, alignment tableA
 		right = 0
 	}
 
-	_, _ = writer.WriteString(strings.Repeat(" ", left))
+	writeSpaces(writer, left)
 	_, _ = writer.WriteString(value)
-	_, _ = writer.WriteString(strings.Repeat(" ", right))
+	writeSpaces(writer, right)
+}
+
+func displayWidth(value string) int {
+	for i := 0; i < len(value); i++ {
+		if value[i] >= utf8.RuneSelf {
+			return runewidth.StringWidth(value)
+		}
+	}
+	return len(value)
+}
+
+func writeSpaces(writer *bufio.Writer, count int) {
+	const spaces = "                                                                "
+	for count > len(spaces) {
+		_, _ = writer.WriteString(spaces)
+		count -= len(spaces)
+	}
+	_, _ = writer.WriteString(spaces[:count])
 }
 
 // formatAsCSV outputs EBS volume information as CSV
